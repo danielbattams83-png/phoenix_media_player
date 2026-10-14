@@ -34,7 +34,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({ 
                 Keyboard Shortcuts
               </h3>
               <p className="text-xs text-zinc-400 font-mono">
-                Windows Media Player Pro Controls
+                Phoenix Media Player Controls
               </p>
             </div>
           </div>

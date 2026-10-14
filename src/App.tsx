@@ -1,40 +1,29 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Play,
-  Pause,
-  SkipBack,
-  SkipForward,
-  Shuffle,
-  Repeat,
-  Repeat1,
-  Volume2,
-  Volume1,
-  VolumeX,
   Heart,
   ListMusic,
   Folder,
-  Music,
-  Disc,
   Mic2,
   Sliders,
   X,
   HardDrive,
   ChevronRight,
-  Maximize2,
   ArrowUpDown,
-  Upload,
-  Keyboard,
-  FileAudio,
+  Menu,
   Film,
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { Track, Playlist, Album, EqualizerPreset } from './types';
+import { Track, Playlist, Album, EqualizerPreset, PlayerView } from './types';
 import { openLocalMediaFiles, parseFileToTrack, formatBytes } from './utils/filePicker';
 import { generateSynthesizedTrackBlob } from './utils/audioSynth';
 import { EqualizerModal } from './components/EqualizerModal';
+import { AppSidebar } from './components/AppSidebar';
+import { PlayerHeader } from './components/PlayerHeader';
 import { AudioVisualizer } from './components/AudioVisualizer';
 import { MiniVisualizer } from './components/MiniVisualizer';
+import { PlaybackBar } from './components/PlaybackBar';
 import { VideoPlayerView } from './components/VideoPlayerView';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 
@@ -278,9 +267,9 @@ const EQUALIZER_PRESETS: EqualizerPreset[] = [
 
 export default function App() {
   // Navigation & View State
-  const [activeTab, setActiveTab] = useState<'now-playing' | 'file-browser' | 'visualizer' | 'albums' | 'playlists' | 'video-player'>('now-playing');
+  const [activeTab, setActiveTab] = useState<PlayerView>('now-playing');
   const [selectedSidebar, setSelectedSidebar] = useState<string>('home');
-  const [isWindowMaximized, setIsWindowMaximized] = useState<boolean>(true);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [showQueueDrawer, setShowQueueDrawer] = useState<boolean>(false);
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false);
   const [showEqualizerModal, setShowEqualizerModal] = useState<boolean>(false);
@@ -309,6 +298,8 @@ export default function App() {
   // Audio & Video Refs (Hidden Media Engines)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const appRootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const isDraggingScrubber = useRef<boolean>(false);
 
   // Web Audio Context & Nodes
@@ -328,6 +319,31 @@ export default function App() {
       setToastMessage(null);
     }, 4000);
   }, []);
+
+  const handleNavigateToSearch = () => {
+    setSelectedSidebar('search');
+    setActiveTab('file-browser');
+    setIsMobileNavOpen(false);
+    window.setTimeout(() => searchInputRef.current?.focus(), 220);
+  };
+
+  const handleSearchFocus = () => {
+    setSelectedSidebar('search');
+    setActiveTab('file-browser');
+  };
+
+  const handleToggleFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await appRootRef.current?.requestFullscreen();
+      }
+    } catch (error) {
+      console.error('Could not change fullscreen mode:', error);
+      showToast('Fullscreen is not available in this window.');
+    }
+  };
 
   // ==========================================
   // INITIALIZE SYNTHETIC AUDIO FOR DEFAULT TRACKS
@@ -699,7 +715,8 @@ export default function App() {
           t.genre.toLowerCase().includes(searchQuery.toLowerCase()) ||
           t.format.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesFormat = formatFilter === 'ALL' ? true : t.format === formatFilter;
-        return matchesSearch && matchesFormat;
+        const matchesFavorites = selectedSidebar !== 'favorites' || t.isFavorite;
+        return matchesSearch && matchesFormat && matchesFavorites;
       })
       .sort((a, b) => {
         let valA = a[sortField];
@@ -711,15 +728,16 @@ export default function App() {
         }
         return sortAsc ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
       });
-  }, [tracks, searchQuery, formatFilter, sortField, sortAsc]);
+  }, [tracks, searchQuery, formatFilter, sortField, sortAsc, selectedSidebar]);
 
   const effectiveDuration = duration > 0 ? duration : currentTrack.duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
 
   return (
     <div
-      id="immersive-media-player-root"
-      className="relative flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 font-sans overflow-hidden border border-white/10 shadow-2xl select-none"
+      ref={appRootRef}
+      id="phoenix-media-player-root"
+      className="relative flex h-[100dvh] w-screen flex-col overflow-hidden bg-zinc-950 font-sans text-zinc-100 shadow-2xl select-none"
     >
       {/* =========================================================
           HIDDEN REAL HTML5 MEDIA ENGINES (<audio> & <video>)
@@ -779,20 +797,27 @@ export default function App() {
           ========================================================= */}
       <header
         id="title-bar"
-        className="h-10 flex items-center justify-between px-4 bg-zinc-900/40 backdrop-blur-md border-b border-white/5 shrink-0 z-30 select-none"
+        className="z-30 flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#0b0d12]/75 px-3 backdrop-blur-xl select-none sm:px-4"
       >
-        {/* Brand identity: diamond badge + uppercase title */}
-        <div className="flex items-center gap-3">
-          <div className="w-4 h-4 bg-indigo-500 rounded-sm rotate-45 shadow-sm shadow-indigo-500/50 flex items-center justify-center">
-            <span className="w-1.5 h-1.5 bg-white rounded-full -rotate-45" />
-          </div>
-          <span className="text-xs font-bold tracking-wider text-zinc-300">
-            WINDOWS MEDIA PLAYER PRO
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <button
+            className="rounded-lg p-2 text-zinc-300 transition-colors hover:bg-white/[0.07] hover:text-white md:hidden"
+            onClick={() => setIsMobileNavOpen(true)}
+            title="Open navigation"
+            aria-label="Open navigation"
+            aria-expanded={isMobileNavOpen}
+            aria-controls="sidebar-navigation"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <img src="/icon-512.png" alt="" aria-hidden="true" className="h-7 w-7 rounded-lg object-contain" />
+          <span className="truncate text-xs font-semibold tracking-wide text-zinc-300 sm:text-sm">
+            Phoenix Media Player
           </span>
         </div>
 
         {/* Drag Region with live play state */}
-        <div className="flex-1 h-full drag-region cursor-default flex items-center justify-center px-4">
+        <div className="drag-region hidden h-full flex-1 cursor-default items-center justify-center px-4 sm:flex">
           {isPlaying ? (
             <div className="flex items-center gap-2 text-xs text-zinc-300 bg-white/5 px-3.5 py-0.5 rounded-full border border-white/10 shadow-sm">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -813,346 +838,44 @@ export default function App() {
           )}
         </div>
 
-        {/* Window & Utility Controls */}
-        <div className="flex items-center gap-4 px-2">
-          <button
-            id="btn-quick-load-files"
-            onClick={handleLoadLocalFiles}
-            className="p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-            title="Import media files"
-            aria-label="Import media files"
-          >
-            <Upload className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={() => setShowShortcutsModal(true)}
-            className="text-zinc-400 hover:text-white transition-colors"
-            title="Keyboard Shortcuts (Space, M, ←, →)"
-          >
-            <Keyboard className="w-3.5 h-3.5" />
-          </button>
-
-          <div className="flex items-center gap-4 pl-2 border-l border-white/10">
-            <button
-              id="title-btn-minimize"
-              title="Minimize"
-              className="text-zinc-500 hover:text-white transition-colors"
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 7h8" />
-              </svg>
-            </button>
-            <button
-              id="title-btn-maximize"
-              title={isWindowMaximized ? 'Restore Down' : 'Maximize'}
-              onClick={() => setIsWindowMaximized(!isWindowMaximized)}
-              className="text-zinc-500 hover:text-white transition-colors"
-            >
-              <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="2" width="8" height="8" rx="1" />
-              </svg>
-            </button>
-            <button
-              id="title-btn-close"
-              title="Close"
-              className="text-zinc-400 hover:text-red-400 transition-colors"
-            >
-              <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 3l8 8M11 3l-8 8" />
-              </svg>
-            </button>
-          </div>
-        </div>
+        <div className="w-9 shrink-0" aria-hidden="true" />
       </header>
 
       {/* =========================================================
           MAIN BODY: SIDEBAR + CONTENT CANVAS
           ========================================================= */}
       <div className="relative flex-1 flex overflow-hidden">
-        {/* ==========================================
-            LEFT SIDEBAR (IMMERSIVE THEME)
-            ========================================== */}
-        <aside
-          id="sidebar-navigation"
-          className="hidden md:flex w-60 xl:w-64 bg-white/[0.025] backdrop-blur-2xl border-r border-white/[0.06] flex-col p-5 gap-6 shrink-0 select-none overflow-y-auto"
-        >
-          {/* Library Section */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2">
-              Library
-            </p>
-            <nav className="space-y-1">
-              <button
-                id="nav-sidebar-home"
-                onClick={() => {
-                  setSelectedSidebar('home');
-                  setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing');
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                  selectedSidebar === 'home'
-                    ? 'bg-white/10 text-white font-medium shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                </svg>
-                <span>Now Playing</span>
-              </button>
-
-              <button
-                id="nav-sidebar-tracks"
-                onClick={() => {
-                  setSelectedSidebar('tracks');
-                  setActiveTab('file-browser');
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                  selectedSidebar === 'tracks' || activeTab === 'file-browser'
-                    ? 'bg-white/10 text-white font-medium shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <FileAudio className="w-[18px] h-[18px] text-indigo-400" />
-                  <span>Media Files</span>
-                </div>
-                <span className="text-[10px] font-mono bg-zinc-800/80 px-2 py-0.5 rounded text-zinc-400">
-                  {tracks.length}
-                </span>
-              </button>
-
-              <button
-                id="nav-sidebar-visualizer"
-                onClick={() => {
-                  setSelectedSidebar('visualizer');
-                  setActiveTab('visualizer');
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                  activeTab === 'visualizer'
-                    ? 'bg-white/10 text-white font-medium shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Sliders className="w-[18px] h-[18px] text-emerald-400" />
-                  <span>Visualizer</span>
-                </div>
-                {isPlaying && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
-              </button>
-
-              <button
-                id="nav-sidebar-albums"
-                onClick={() => {
-                  setSelectedSidebar('albums');
-                  setActiveTab('albums');
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                  selectedSidebar === 'albums' && activeTab === 'albums'
-                    ? 'bg-white/10 text-white font-medium shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Disc className="w-[18px] h-[18px]" />
-                  <span>Albums</span>
-                </div>
-                <span className="text-[10px] font-mono text-zinc-500">{MOCK_ALBUMS.length}</span>
-              </button>
-
-              <button
-                id="nav-sidebar-favorites"
-                onClick={() => {
-                  setSelectedSidebar('favorites');
-                  setActiveTab('file-browser');
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                  selectedSidebar === 'favorites'
-                    ? 'bg-white/10 text-white font-medium shadow-sm'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Heart className="w-[18px] h-[18px] text-rose-400" />
-                  <span>Favorites</span>
-                </div>
-                <span className="text-[10px] font-mono text-zinc-500">
-                  {tracks.filter((t) => t.isFavorite).length}
-                </span>
-              </button>
-            </nav>
-          </div>
-
-          {/* Playlists Section */}
-          <div className="space-y-3">
-            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2">
-              Playlists
-            </p>
-            <nav className="space-y-1">
-              {MOCK_PLAYLISTS.map((pl) => (
-                <button
-                  key={pl.id}
-                  onClick={() => {
-                    setSelectedSidebar(pl.id);
-                    setActiveTab('playlists');
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                    selectedSidebar === pl.id && activeTab === 'playlists'
-                      ? 'bg-white/10 text-white font-medium shadow-sm'
-                      : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: pl.accentColor }}
-                  />
-                  <span className="truncate">{pl.name}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <div className="mt-auto pt-4 border-t border-white/[0.06]">
-            <button
-              id="btn-sidebar-dsp"
-              onClick={() => setShowEqualizerModal(true)}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
-              title="Open Velocity Audio DSP settings"
-            >
-              <Sliders className="w-[18px] h-[18px] text-indigo-300" />
-              <span>Audio settings</span>
-            </button>
-          </div>
-        </aside>
+        <AppSidebar
+          activeTab={activeTab}
+          currentTrackIsVideo={currentTrack.mediaType === 'video'}
+          isMobileNavOpen={isMobileNavOpen}
+          onCloseMobileNav={() => setIsMobileNavOpen(false)}
+          onOpenEqualizer={() => setShowEqualizerModal(true)}
+          onSearch={handleNavigateToSearch}
+          playlists={MOCK_PLAYLISTS}
+          selectedSidebar={selectedSidebar}
+          setActiveTab={setActiveTab}
+          setSelectedSidebar={setSelectedSidebar}
+          tracks={tracks}
+        />
 
         {/* ==========================================
             CENTER MAIN CANVAS (IMMERSIVE THEME)
             ========================================== */}
-        <main className="flex-1 relative flex flex-col bg-[#090b10] overflow-hidden">
+        <main className="relative flex flex-1 flex-col overflow-hidden bg-[#090b10]">
           {/* Radial ambient background highlight */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(129,140,248,0.13),transparent_70%)] pointer-events-none" />
 
-          {/* Header Navigation: Underline Tabs & Search Bar */}
-          <header className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center px-6 xl:px-8 pt-5 shrink-0 gap-4">
-            <div className="hidden lg:block" />
-            {/* Underline Tabs */}
-            <div className="flex items-center justify-center lg:justify-self-center gap-4 xl:gap-7 order-2 lg:order-1 overflow-x-auto max-w-full">
-              <button
-                id="tab-btn-now-playing"
-                onClick={() => setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing')}
-                className={`text-sm font-semibold pb-2 transition-colors ${
-                  activeTab === 'now-playing' || activeTab === 'video-player'
-                    ? 'border-b-2 border-indigo-500 text-white'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {currentTrack.mediaType === 'video' ? 'Video Player' : 'Now Playing'}
-              </button>
-
-              <button
-                id="tab-btn-media-browser"
-                onClick={() => setActiveTab('file-browser')}
-                className={`text-sm font-semibold pb-2 transition-colors ${
-                  activeTab === 'file-browser'
-                    ? 'border-b-2 border-indigo-500 text-white'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                File Browser
-              </button>
-
-              <button
-                id="tab-btn-visualizer"
-                onClick={() => setActiveTab('visualizer')}
-                className={`text-sm font-semibold pb-2 transition-colors ${
-                  activeTab === 'visualizer'
-                    ? 'border-b-2 border-indigo-500 text-white'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                Visualizer
-              </button>
-
-              <button
-                id="tab-btn-albums"
-                onClick={() => setActiveTab('albums')}
-                className={`text-sm font-semibold pb-2 transition-colors ${
-                  activeTab === 'albums'
-                    ? 'border-b-2 border-indigo-500 text-white'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                Albums
-              </button>
-
-              <button
-                id="tab-btn-playlists"
-                onClick={() => setActiveTab('playlists')}
-                className={`text-sm font-semibold pb-2 transition-colors ${
-                  activeTab === 'playlists'
-                    ? 'border-b-2 border-indigo-500 text-white'
-                    : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                Playlists
-              </button>
-            </div>
-
-            {/* Right Controls: Search Pill + Drawer Toggles */}
-            <div className="flex items-center justify-end gap-3 order-1 lg:order-2 lg:justify-self-end">
-              <div className="bg-white/[0.045] border border-white/[0.08] rounded-full px-4 py-2 flex items-center gap-2">
-                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-500">
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-                <input
-                  id="input-media-search"
-                  type="text"
-                  placeholder="Search Library"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-transparent border-none outline-none text-xs w-32 text-zinc-200 placeholder:text-zinc-500"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="text-zinc-500 hover:text-zinc-300"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-
-              {(activeTab === 'now-playing' || activeTab === 'video-player') && (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    id="btn-toggle-lyrics"
-                    onClick={() => setShowLyricsPanel(!showLyricsPanel)}
-                    className={`p-2.5 rounded-full border transition-all ${
-                      showLyricsPanel
-                        ? 'bg-indigo-400/15 text-indigo-200 border-indigo-300/20'
-                        : 'bg-white/[0.04] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
-                    }`}
-                    title="Toggle Synced Lyrics"
-                  >
-                    <Mic2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    id="btn-toggle-queue"
-                    onClick={() => setShowQueueDrawer(!showQueueDrawer)}
-                    className={`p-2.5 rounded-full border transition-all ${
-                      showQueueDrawer
-                        ? 'bg-indigo-400/15 text-indigo-200 border-indigo-300/20'
-                        : 'bg-white/[0.04] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
-                    }`}
-                    title="Toggle Queue"
-                  >
-                    <ListMusic className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-          </header>
+          <PlayerHeader
+            activeTab={activeTab}
+            isLyricsOpen={showLyricsPanel}
+            onImportFiles={handleLoadLocalFiles}
+            onToggleLyrics={() => setShowLyricsPanel((open) => !open)}
+            searchInputRef={searchInputRef}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onSearchFocus={handleSearchFocus}
+          />
 
           {/* TAB 1: NOW PLAYING (IMMERSIVE SHOWCASE HERO) */}
           {activeTab === 'now-playing' && currentTrack.mediaType !== 'video' && (
@@ -1321,11 +1044,11 @@ export default function App() {
 
           {/* TAB 2: FILE BROWSER (IMMERSIVE EXPLORER) */}
           {activeTab === 'file-browser' && (
-            <div className="p-8 space-y-5 flex-1 flex flex-col overflow-y-auto animate-fadeIn">
+            <div className="flex flex-1 flex-col space-y-4 overflow-y-auto p-4 animate-fadeIn sm:space-y-5 sm:p-6 lg:p-8">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/[0.035] p-4 rounded-2xl border border-white/[0.06] backdrop-blur-xl">
                 <div className="flex items-center gap-2 text-xs text-zinc-400">
                   <HardDrive className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Velocity Storage</span>
+                  <span>Your Library</span>
                   <ChevronRight className="w-3 h-3 text-zinc-600" />
                   <Folder className="w-3.5 h-3.5 text-indigo-400" />
                   <span>Media Library ({tracks.length} Files)</span>
@@ -1352,8 +1075,10 @@ export default function App() {
               </div>
 
               {/* Table */}
-              <div className="flex-1 rounded-2xl bg-zinc-900/30 border border-white/5 overflow-hidden flex flex-col">
-                <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-zinc-950/70 border-b border-white/5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+              <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.025]">
+                <div className="min-w-0 flex-1 overflow-auto">
+                  <div className="min-w-[620px]">
+                <div className="grid grid-cols-12 gap-3 border-b border-white/[0.06] bg-white/[0.025] px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                   <div className="col-span-1 text-center">#</div>
                   <div
                     className="col-span-4 flex items-center gap-1 cursor-pointer hover:text-white"
@@ -1388,7 +1113,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="divide-y divide-white/[0.03] overflow-y-auto flex-1 max-h-[480px]">
+                <div className="max-h-[480px] divide-y divide-white/[0.03] overflow-y-auto">
                   {filteredTracks.map((track, idx) => {
                     const isCurrent = tracks[currentTrackIndex]?.id === track.id;
                     const originalIndex = tracks.findIndex((t) => t.id === track.id);
@@ -1465,6 +1190,8 @@ export default function App() {
                     );
                   })}
                 </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1482,7 +1209,7 @@ export default function App() {
 
           {/* TAB 4: ALBUMS */}
           {activeTab === 'albums' && (
-            <div className="p-8 space-y-6 overflow-y-auto flex-1 animate-fadeIn">
+            <div className="flex-1 space-y-6 overflow-y-auto p-4 animate-fadeIn sm:p-6 lg:p-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-black uppercase tracking-tight text-white">
@@ -1527,7 +1254,7 @@ export default function App() {
 
           {/* TAB 5: PLAYLISTS */}
           {activeTab === 'playlists' && (
-            <div className="p-8 space-y-6 overflow-y-auto flex-1 animate-fadeIn">
+            <div className="flex-1 space-y-6 overflow-y-auto p-4 animate-fadeIn sm:p-6 lg:p-8">
               <div>
                 <h2 className="text-2xl font-black uppercase tracking-tight text-white">
                   Curated DSP Playlists
@@ -1634,234 +1361,47 @@ export default function App() {
         )}
       </div>
 
-      {/* =========================================================
-          PERSISTENT BOTTOM PLAYBACK BAR (IMMERSIVE THEME)
-          ========================================================= */}
-      <footer
-        id="bottom-playback-bar"
-        className="h-24 bg-[#0b0d12]/90 backdrop-blur-2xl border-t border-white/[0.08] px-5 xl:px-8 flex items-center justify-between gap-4 shrink-0 z-30 select-none relative"
-      >
-        {/* Top edge subtle interactive scrubber bar */}
-        <div className="absolute -top-[3px] left-0 right-0 h-1 bg-zinc-800 group cursor-pointer">
-          <div
-            className="h-full bg-indigo-500 relative transition-all"
-            style={{ width: `${progressPercent}%` }}
-          >
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md scale-0 group-hover:scale-100 transition-transform" />
-          </div>
-        </div>
-
-        {/* Left: Track Info & Thumbnail */}
-        <div className="flex items-center gap-3 w-[28%] min-w-0">
-          <div className="relative group/thumb cursor-pointer" onClick={() => setActiveTab('now-playing')}>
-            <img
-              src={currentTrack.coverArt}
-              alt={currentTrack.title}
-              referrerPolicy="no-referrer"
-              className="w-12 h-12 rounded-xl object-cover border border-white/10 shadow-lg"
-            />
-            <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center">
-              <Maximize2 className="w-4 h-4 text-white" />
-            </div>
-          </div>
-
-          <div className="min-w-0 space-y-0.5">
-            <p className="text-xs font-bold uppercase tracking-wide truncate text-white hover:text-indigo-400 cursor-pointer transition-colors" onClick={() => setActiveTab('now-playing')}>
-              {currentTrack.title}
-            </p>
-            <p className="text-[11px] text-zinc-400 truncate">{currentTrack.artist}</p>
-          </div>
-
-          <div className="flex items-center gap-1.5 ml-1">
-            <button
-              onClick={(e) => handleToggleFavorite(currentTrack.id, e)}
-              className="p-1.5 text-zinc-500 hover:text-rose-400 transition-colors"
-              title="Favorite"
-            >
-              <Heart
-                className={`w-4 h-4 ${
-                  currentTrack.isFavorite ? 'text-rose-500 fill-rose-500' : 'text-zinc-500'
-                }`}
-              />
-            </button>
-
-            <div
-              onClick={() => setActiveTab('visualizer')}
-              className="cursor-pointer hidden sm:flex items-center opacity-80 hover:opacity-100 transition-opacity p-1 bg-zinc-900/60 rounded-md border border-white/5"
-              title="Open Spectrum Visualizer"
-            >
-              <MiniVisualizer
-                isPlaying={isPlaying}
-                accentColor={currentTrack.accentColor}
-                analyserNode={analyserRef.current}
-                bars={6}
-                className="w-10 h-3.5"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Center: Playback Controls + Scrub Bar */}
-        <div className="flex flex-col items-center gap-1.5 w-[44%] min-w-[250px] max-w-xl">
-          <div className="flex items-center gap-3 md:gap-5">
-            {/* Shuffle */}
-            <button
-              id="btn-ctrl-shuffle"
-              onClick={() => setIsShuffle(!isShuffle)}
-              className={`p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors ${
-                isShuffle ? 'text-indigo-400 font-bold' : ''
-              }`}
-              title="Shuffle"
-            >
-              <Shuffle className="w-4 h-4" />
-            </button>
-
-            {/* Skip Prev */}
-            <button
-              id="btn-ctrl-prev"
-              onClick={handlePrevTrack}
-              className="p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-colors"
-              title="Previous (P)"
-            >
-              <SkipBack className="w-5 h-5 fill-current" />
-            </button>
-
-            {/* Play/Pause Main Button */}
-            <button
-              id="btn-ctrl-play-pause"
-              onClick={handleTogglePlay}
-              className="w-12 h-12 rounded-full bg-white text-zinc-950 flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-[0_8px_28px_rgba(255,255,255,0.16)] cursor-pointer"
-              title="Play/Pause (Space)"
-            >
-              {isPlaying ? (
-                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                </svg>
-              ) : (
-                <Play className="w-5 h-5 fill-current ml-0.5" />
-              )}
-            </button>
-
-            {/* Skip Next */}
-            <button
-              id="btn-ctrl-next"
-              onClick={handleNextTrack}
-              className="p-2 rounded-full text-zinc-300 hover:text-white hover:bg-white/[0.06] transition-colors"
-              title="Next (N)"
-            >
-              <SkipForward className="w-5 h-5 fill-current" />
-            </button>
-
-            {/* Repeat */}
-            <button
-              id="btn-ctrl-repeat"
-              onClick={toggleRepeat}
-              className={`p-2 rounded-full text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors ${
-                repeatMode !== 'off' ? 'text-indigo-400' : ''
-              }`}
-              title={`Repeat: ${repeatMode}`}
-            >
-              {repeatMode === 'one' ? (
-                <Repeat1 className="w-4 h-4 text-indigo-400" />
-              ) : (
-                <Repeat className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-
-          {/* Time Scrubber */}
-          <div className="w-full flex items-center gap-3">
-            <span className="text-[10px] font-mono text-zinc-500 w-9 text-right">
-              {formatTime(currentTime)}
-            </span>
-            <div className="relative flex-1 flex items-center group">
-              <input
-                id="seek-slider"
-                type="range"
-                min={0}
-                max={effectiveDuration}
-                step={0.1}
-                value={currentTime}
-                onChange={handleSeek}
-                onMouseDown={() => (isDraggingScrubber.current = true)}
-                onMouseUp={() => (isDraggingScrubber.current = false)}
-                className="playback-range w-full h-4 rounded-lg appearance-none cursor-pointer focus:outline-none"
-                style={{ '--range-progress': `${progressPercent}%` } as React.CSSProperties}
-              />
-            </div>
-            <span className="text-[10px] font-mono text-zinc-500 w-9">
-              {formatTime(effectiveDuration)}
-            </span>
-          </div>
-        </div>
-
-        {/* Right: Volume & DSP Shortcuts */}
-        <div className="flex items-center justify-end gap-2 md:gap-3 w-[28%] min-w-0">
-          <select
-            value={playbackSpeed}
-            onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-            className="hidden lg:block text-[11px] font-medium px-2.5 py-1.5 rounded-full bg-white/[0.045] border border-white/[0.08] text-zinc-300 hover:text-white focus:outline-none focus:ring-1 focus:ring-indigo-300/40"
-            title="Playback speed"
-            aria-label="Playback speed"
-          >
-            {[0.75, 1.0, 1.25, 1.5, 2.0].map((speed) => (
-              <option key={speed} value={speed} className="bg-zinc-900">
-                {speed}x
-              </option>
-            ))}
-          </select>
-
-          {/* Equalizer DSP Button */}
-          <button
-            id="btn-bottom-equalizer"
-            onClick={() => setShowEqualizerModal(true)}
-            className="hidden sm:inline-flex p-2 text-zinc-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
-            title="Configure Equalizer DSP"
-          >
-            <Sliders className="w-4 h-4 text-indigo-400" />
-          </button>
-
-          {/* Keyboard Shortcuts Trigger */}
-          <button
-            onClick={() => setShowShortcutsModal(true)}
-            className="hidden xl:inline-flex p-2 text-zinc-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
-            title="Keyboard Shortcuts"
-          >
-            <Keyboard className="w-4 h-4" />
-          </button>
-
-          {/* Volume Control */}
-          <div className="flex items-center gap-2">
-            <button
-              id="btn-ctrl-mute"
-              onClick={toggleMute}
-              className="text-zinc-400 hover:text-white transition-colors"
-              title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
-            >
-              {isMuted || volume === 0 ? (
-                <VolumeX className="w-4 h-4 text-rose-400" />
-              ) : volume < 50 ? (
-                <Volume1 className="w-4 h-4" />
-              ) : (
-                <Volume2 className="w-4 h-4" />
-              )}
-            </button>
-            <input
-              id="volume-slider"
-              type="range"
-              min={0}
-              max={100}
-              value={isMuted ? 0 : volume}
-              onChange={(e) => {
-                setVolume(Number(e.target.value));
-                if (isMuted) setIsMuted(false);
-              }}
-              className="playback-range hidden lg:block w-20 h-4 rounded-lg appearance-none cursor-pointer focus:outline-none"
-              style={{ '--range-progress': `${isMuted ? 0 : volume}%` } as React.CSSProperties}
-            />
-          </div>
-        </div>
-      </footer>
+      <PlaybackBar
+        analyserNode={analyserRef.current}
+        currentTime={currentTime}
+        effectiveDuration={effectiveDuration}
+        isMuted={isMuted}
+        isPlaying={isPlaying}
+        isQueueOpen={showQueueDrawer}
+        isShuffle={isShuffle}
+        onNextTrack={handleNextTrack}
+        onOpenEqualizer={() => setShowEqualizerModal(true)}
+        onOpenShortcuts={() => setShowShortcutsModal(true)}
+        onPreviousTrack={handlePrevTrack}
+        onSeek={handleSeek}
+        onSetPlaybackSpeed={setPlaybackSpeed}
+        onSetVolume={(nextVolume) => {
+          setVolume(nextVolume);
+          if (isMuted) setIsMuted(false);
+        }}
+        onShowNowPlaying={() => {
+          setSelectedSidebar('home');
+          setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing');
+        }}
+        onShowVisualizer={() => {
+          setSelectedSidebar('visualizer');
+          setActiveTab('visualizer');
+        }}
+        onToggleFavorite={(trackId) => handleToggleFavorite(trackId)}
+        onToggleFullscreen={handleToggleFullscreen}
+        onToggleMute={toggleMute}
+        onTogglePlay={handleTogglePlay}
+        onToggleQueue={() => setShowQueueDrawer((open) => !open)}
+        onToggleRepeat={toggleRepeat}
+        onToggleShuffle={() => setIsShuffle((shuffle) => !shuffle)}
+        onStartScrubbing={() => { isDraggingScrubber.current = true; }}
+        onStopScrubbing={() => { isDraggingScrubber.current = false; }}
+        playbackSpeed={playbackSpeed}
+        progressPercent={progressPercent}
+        repeatMode={repeatMode}
+        track={currentTrack}
+        volume={volume}
+      />
 
       {/* =========================================================
           MODALS: EQUALIZER DSP & KEYBOARD SHORTCUTS

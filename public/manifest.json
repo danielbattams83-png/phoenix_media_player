@@ -1,7 +1,7 @@
 {
-  "name": "Windows Media Player Pro",
-  "short_name": "Media Player",
-  "description": "High-fidelity Windows Media Player with Web Audio DSP, lossless audio explorer, 5-band equalizer, and real-time spectrum visualizer.",
+  "name": "Phoenix Media Player",
+  "short_name": "Phoenix Media Player",
+  "description": "Phoenix Media Player brings high-fidelity local audio and video playback, Web Audio DSP, a 5-band equalizer, and real-time visualization.",
   "start_url": "/",
   "id": "/",
   "scope": "/",
@@ -12,8 +12,8 @@
     "minimal-ui"
   ],
   "orientation": "any",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
   "categories": [
     "music",
     "entertainment",
@@ -23,22 +23,16 @@
   ],
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/icon-192.svg",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/icon-512.svg",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "shortcuts": [
@@ -47,21 +41,21 @@
       "short_name": "Playing",
       "description": "Open Now Playing view",
       "url": "/?view=now-playing",
-      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Audio Visualizer",
       "short_name": "Visualizer",
       "description": "Open Spectrum Visualizer",
       "url": "/?view=visualizer",
-      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Media Library",
       "short_name": "Library",
       "description": "Open Lossless Audio Library",
       "url": "/?view=library",
-      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "file_handlers": [

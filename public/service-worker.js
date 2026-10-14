@@ -1,11 +1,10 @@
-const CACHE_NAME = 'wmp-pro-cache-v1';
+const CACHE_NAME = 'phoenix-media-player-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg',
-  '/icon-192.svg',
-  '/icon-512.svg'
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -67,7 +66,7 @@ self.addEventListener('fetch', (event) => {
           if (event.request.mode === 'navigate') {
             return caches.match('/index.html');
           }
-          return new Response('Offline - Windows Media Player Pro', {
+          return new Response('Offline - Phoenix Media Player', {
             status: 503,
             statusText: 'Service Unavailable',
             headers: new Headers({ 'Content-Type': 'text/plain' })
