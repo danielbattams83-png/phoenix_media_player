@@ -280,7 +280,7 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
         max={100}
         value={isMuted ? 0 : volume}
         onChange={(event) => onSetVolume(Number(event.target.value))}
-        className="playback-range hidden h-4 w-20 cursor-pointer rounded-lg focus:outline-none xl:block"
+        className="playback-range block h-4 w-14 cursor-pointer rounded-lg focus:outline-none sm:w-16 xl:w-20"
         style={{ '--range-progress': `${isMuted ? 0 : volume}%` } as React.CSSProperties}
         aria-label="Volume"
       />

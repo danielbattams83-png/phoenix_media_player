@@ -179,3 +179,16 @@ export async function openLocalMediaFiles(): Promise<File[]> {
     input.click();
   });
 }
+
+export function openLocalMediaFolder(): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.accept = 'audio/*,video/*,.mp3,.wav,.flac,.aac,.ogg,.m4a,.mp4,.webm';
+    input.setAttribute('webkitdirectory', '');
+    input.onchange = () => resolve(input.files ? Array.from(input.files) : []);
+    input.oncancel = () => resolve([]);
+    input.click();
+  });
+}

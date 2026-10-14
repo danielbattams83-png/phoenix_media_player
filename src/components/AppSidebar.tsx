@@ -6,6 +6,8 @@ import {
   Home,
   Library,
   ListMusic,
+  Images,
+  Music2,
   Search,
   SlidersHorizontal,
   X
@@ -124,6 +126,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             <ListMusic className="h-[18px] w-[18px]" />
             <span>Playlists</span>
           </button>
+          <button
+            onClick={() => navigate('spotify', 'now-playing')}
+            className={navItemClass(selectedSidebar === 'spotify')}
+          >
+            <Music2 className="h-[18px] w-[18px]" />
+            <span>Spotify</span>
+          </button>
         </nav>
 
         <div className="space-y-2">
@@ -136,6 +145,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           >
             <Disc3 className="h-[18px] w-[18px]" />
             <span>Albums</span>
+          </button>
+          <button
+            onClick={() => navigate('images', 'images')}
+            className={navItemClass(activeTab === 'images')}
+          >
+            <Images className="h-[18px] w-[18px]" />
+            <span>Images</span>
           </button>
           <button
             onClick={() => navigate('favorites', 'file-browser')}

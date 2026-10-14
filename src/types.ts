@@ -1,5 +1,5 @@
 export type MediaFormat = 'FLAC' | 'MP3' | 'WAV' | 'AAC' | 'OGG' | 'M4A' | 'MP4' | 'WEBM';
-export type PlayerView = 'now-playing' | 'file-browser' | 'visualizer' | 'albums' | 'playlists' | 'video-player';
+export type PlayerView = 'now-playing' | 'file-browser' | 'visualizer' | 'albums' | 'playlists' | 'video-player' | 'spotify' | 'images';
 
 export interface Track {
   id: string;
@@ -31,9 +31,22 @@ export interface Playlist {
   id: string;
   name: string;
   trackCount: number;
+  trackIds: string[];
   coverArt: string;
   accentColor: string;
   description: string;
+}
+
+export interface ImageAsset {
+  id: string;
+  name: string;
+  collectionId: string;
+  url: string;
+}
+
+export interface ImageCollection {
+  id: string;
+  name: string;
 }
 
 export interface Album {

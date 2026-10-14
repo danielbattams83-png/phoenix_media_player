@@ -15,9 +15,23 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { Track, Playlist, Album, EqualizerPreset, PlayerView } from './types';
-import { openLocalMediaFiles, parseFileToTrack, formatBytes } from './utils/filePicker';
+import { Track, Playlist, Album, EqualizerPreset, PlayerView, ImageAsset, ImageCollection } from './types';
+import { openLocalMediaFiles, openLocalMediaFolder, parseFileToTrack, formatBytes } from './utils/filePicker';
 import { generateSynthesizedTrackBlob } from './utils/audioSynth';
+import {
+  deleteImage,
+  loadImageCollections,
+  loadImages,
+  loadImportedTracks,
+  loadPlaylists,
+  loadSettings,
+  requestPersistentStorage,
+  saveImage,
+  saveImageCollections,
+  saveImportedTrack,
+  savePlaylists,
+  saveSettings
+} from './utils/persistence';
 import { EqualizerModal } from './components/EqualizerModal';
 import { AppSidebar } from './components/AppSidebar';
 import { PlayerHeader } from './components/PlayerHeader';
@@ -26,6 +40,9 @@ import { MiniVisualizer } from './components/MiniVisualizer';
 import { PlaybackBar } from './components/PlaybackBar';
 import { VideoPlayerView } from './components/VideoPlayerView';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { PlaylistsView } from './components/PlaylistsView';
+import { ImagesView } from './components/ImagesView';
+import { SpotifyView } from './components/SpotifyView';
 
 // ==========================================
 // UTILITY FUNCTIONS
@@ -202,33 +219,6 @@ const INITIAL_TRACKS: Track[] = [
   }
 ];
 
-const MOCK_PLAYLISTS: Playlist[] = [
-  {
-    id: 'pl-1',
-    name: 'Synthwave After-Hours',
-    trackCount: 24,
-    coverArt: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=600&auto=format&fit=crop',
-    accentColor: '#6366f1',
-    description: 'Analog synthesizer leads, arpeggiated basslines, and retro midnight vibes.'
-  },
-  {
-    id: 'pl-2',
-    name: 'Deep Focus Mix',
-    trackCount: 32,
-    coverArt: 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?q=80&w=600&auto=format&fit=crop',
-    accentColor: '#10b981',
-    description: 'Binaural ambient, minimal neoclassical piano, and gentle frequencies.'
-  },
-  {
-    id: 'pl-3',
-    name: 'Underground Radio',
-    trackCount: 18,
-    coverArt: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=600&auto=format&fit=crop',
-    accentColor: '#f59e0b',
-    description: 'High-resolution lossless masters, live acoustic jazz, and vinyl cuts.'
-  }
-];
-
 const MOCK_ALBUMS: Album[] = [
   {
     id: 'alb-1',
@@ -268,7 +258,10 @@ const EQUALIZER_PRESETS: EqualizerPreset[] = [
 export default function App() {
   // Navigation & View State
   const [activeTab, setActiveTab] = useState<PlayerView>('now-playing');
-  const [selectedSidebar, setSelectedSidebar] = useState<string>('home');
+  const [selectedSidebar, setSelectedSidebar] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('code') || params.has('error') ? 'spotify' : 'home';
+  });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [showQueueDrawer, setShowQueueDrawer] = useState<boolean>(false);
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false);
@@ -282,6 +275,12 @@ export default function App() {
 
   // Playback Engine State
   const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
+  const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
+  const [playlistQueueIds, setPlaylistQueueIds] = useState<string[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [images, setImages] = useState<ImageAsset[]>([]);
+  const [imageCollections, setImageCollections] = useState<ImageCollection[]>([]);
+  const [storageReady, setStorageReady] = useState(false);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -332,6 +331,101 @@ export default function App() {
     setActiveTab('file-browser');
   };
 
+  useEffect(() => {
+    let active = true;
+    const restoreSavedData = async () => {
+      try {
+        const isInstalledApp = window.matchMedia('(display-mode: standalone)').matches
+          || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+        let persistence: 'granted' | 'denied' | 'unsupported' = 'unsupported';
+        try {
+          persistence = await requestPersistentStorage();
+        } catch (error) {
+          console.warn('Could not request persistent device storage:', error);
+        }
+        if (active && isInstalledApp && persistence !== 'granted') {
+          showToast('Device storage protection is unavailable. Your browser may clear saved media if storage is low.');
+        }
+        const [savedTracks, savedImages] = await Promise.all([loadImportedTracks(), loadImages()]);
+        const savedPlaylists = loadPlaylists();
+        const savedCollections = loadImageCollections();
+        const settings = loadSettings({
+          volume: 75,
+          isMuted: false,
+          isShuffle: false,
+          repeatMode: 'all',
+          playbackSpeed: 1,
+          selectedEqPreset: 'Spatial Immersive',
+          eqBands: [3, 2, -1, 3, 4],
+        });
+        if (!active) {
+          savedTracks.forEach((track) => track.mediaUrl && URL.revokeObjectURL(track.mediaUrl));
+          savedImages.forEach((image) => URL.revokeObjectURL(image.url));
+          return;
+        }
+        setTracks((current) => [...current, ...savedTracks.filter((saved) => !current.some((track) => track.id === saved.id))]);
+        setImages(savedImages);
+        setPlaylists(savedPlaylists);
+        setImageCollections(savedCollections);
+        setVolume(settings.volume);
+        setIsMuted(settings.isMuted);
+        setIsShuffle(settings.isShuffle);
+        setRepeatMode(settings.repeatMode);
+        setPlaybackSpeed(settings.playbackSpeed);
+        setSelectedEqPreset(settings.selectedEqPreset);
+        setEqBands(settings.eqBands);
+      } catch (error) {
+        console.error('Could not restore saved player data:', error);
+        showToast('Some saved player data could not be restored. Check browser storage and try again.');
+      } finally {
+        if (active) setStorageReady(true);
+      }
+    };
+    void restoreSavedData();
+    return () => {
+      active = false;
+    };
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    void Promise.all(tracks.filter((track) => track.isLocal && track.fileRef).map(saveImportedTrack))
+      .catch((error: unknown) => {
+        console.error('Could not persist imported tracks:', error);
+        showToast('Could not save imported media. Browser storage may be full.');
+      });
+  }, [tracks, storageReady, showToast]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      savePlaylists(playlists);
+    } catch (error) {
+      console.error('Could not persist playlists:', error);
+      showToast('Could not save playlists. Check browser storage.');
+    }
+  }, [playlists, storageReady, showToast]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      saveImageCollections(imageCollections);
+    } catch (error) {
+      console.error('Could not persist image collections:', error);
+      showToast('Could not save image collections. Check browser storage.');
+    }
+  }, [imageCollections, storageReady, showToast]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      saveSettings({ volume, isMuted, isShuffle, repeatMode, playbackSpeed, selectedEqPreset, eqBands });
+    } catch (error) {
+      console.error('Could not persist player settings:', error);
+      showToast('Could not save player settings. Check browser storage.');
+    }
+  }, [volume, isMuted, isShuffle, repeatMode, playbackSpeed, selectedEqPreset, eqBands, storageReady, showToast]);
+
   const handleToggleFullscreen = async () => {
     try {
       if (document.fullscreenElement) {
@@ -371,7 +465,8 @@ export default function App() {
           })
         );
         if (isMounted) {
-          setTracks(updated);
+          const synthesizedById = new Map(updated.map((track) => [track.id, track]));
+          setTracks((current) => current.map((track) => synthesizedById.get(track.id) ?? track));
         }
       } catch (err) {
         console.warn('Synth sound generator notice:', err);
@@ -506,6 +601,8 @@ export default function App() {
   }, [currentTrack.mediaType, isPlaying, initWebAudio]);
 
   const handlePlayTrack = useCallback((index: number) => {
+    setActivePlaylistId(null);
+    setPlaylistQueueIds([]);
     setCurrentTrackIndex(index);
     setCurrentTime(0);
     setIsPlaying(true);
@@ -516,28 +613,55 @@ export default function App() {
     }
   }, [tracks, activeTab]);
 
+  const handlePlayPlaylistTrack = (playlistId: string, trackId: string) => {
+    const playlist = playlists.find((item) => item.id === playlistId);
+    const index = tracks.findIndex((track) => track.id === trackId);
+    if (!playlist || index < 0) return;
+    setActivePlaylistId(playlist.id);
+    setPlaylistQueueIds(playlist.trackIds);
+    setCurrentTrackIndex(index);
+    setCurrentTime(0);
+    setIsPlaying(true);
+  };
+
   const handleNextTrack = useCallback(() => {
-    if (isShuffle) {
-      const nextIndex = Math.floor(Math.random() * tracks.length);
-      setCurrentTrackIndex(nextIndex);
+    if (activePlaylistId && playlistQueueIds.length) {
+      const currentId = tracks[currentTrackIndex]?.id;
+      const currentQueueIndex = playlistQueueIds.indexOf(currentId);
+      const nextQueueIndex = isShuffle
+        ? Math.floor(Math.random() * playlistQueueIds.length)
+        : currentQueueIndex < 0 ? 0 : (currentQueueIndex + 1) % playlistQueueIds.length;
+      const nextTrackIndex = tracks.findIndex((track) => track.id === playlistQueueIds[nextQueueIndex]);
+      if (nextTrackIndex >= 0) setCurrentTrackIndex(nextTrackIndex);
     } else {
-      setCurrentTrackIndex((prev) => (prev + 1) % tracks.length);
+      if (isShuffle) {
+        setCurrentTrackIndex(Math.floor(Math.random() * tracks.length));
+      } else {
+        setCurrentTrackIndex((prev) => (prev + 1) % tracks.length);
+      }
     }
     setCurrentTime(0);
     setIsPlaying(true);
-  }, [isShuffle, tracks.length]);
+  }, [activePlaylistId, currentTrackIndex, isShuffle, playlistQueueIds, tracks]);
 
   const handlePrevTrack = useCallback(() => {
     const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
     if (el && el.currentTime > 3) {
       el.currentTime = 0;
       setCurrentTime(0);
+    } else if (activePlaylistId && playlistQueueIds.length) {
+      const currentQueueIndex = playlistQueueIds.indexOf(tracks[currentTrackIndex]?.id);
+      const previousQueueIndex = currentQueueIndex < 0
+        ? playlistQueueIds.length - 1
+        : (currentQueueIndex - 1 + playlistQueueIds.length) % playlistQueueIds.length;
+      const previousTrackIndex = tracks.findIndex((track) => track.id === playlistQueueIds[previousQueueIndex]);
+      if (previousTrackIndex >= 0) setCurrentTrackIndex(previousTrackIndex);
     } else {
       setCurrentTrackIndex((prev) => (prev - 1 + tracks.length) % tracks.length);
-      setCurrentTime(0);
     }
+    setCurrentTime(0);
     setIsPlaying(true);
-  }, [currentTrack.mediaType, tracks.length]);
+  }, [activePlaylistId, currentTrack.mediaType, currentTrackIndex, playlistQueueIds, tracks]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const seekTime = Number(e.target.value);
@@ -585,9 +709,8 @@ export default function App() {
   // ==========================================
   // LOCAL FILE LOADING (HTML5 FILE SYSTEM API)
   // ==========================================
-  const handleLoadLocalFiles = async () => {
+  const handleImportFiles = async (files: File[], playlistName?: string) => {
     try {
-      const files = await openLocalMediaFiles();
       if (!files || files.length === 0) return;
 
       const parsedTracks: Track[] = [];
@@ -600,18 +723,190 @@ export default function App() {
       setCurrentTrackIndex(0);
       setCurrentTime(0);
       setIsPlaying(true);
-
-      const firstIsVideo = parsedTracks[0]?.mediaType === 'video';
-      if (firstIsVideo) {
-        setActiveTab('video-player');
+      if (playlistName) {
+        const id = `playlist-${Date.now()}`;
+        const importedTrackIds = parsedTracks.map((track) => track.id);
+        setPlaylists((previous) => [{
+          id,
+          name: playlistName,
+          trackCount: parsedTracks.length,
+          trackIds: importedTrackIds,
+          coverArt: parsedTracks[0]?.coverArt ?? '',
+          accentColor: parsedTracks[0]?.accentColor ?? '#6366f1',
+          description: `Imported from folder with ${parsedTracks.length} media files.`
+        }, ...previous]);
+        setActivePlaylistId(id);
+        setPlaylistQueueIds(importedTrackIds);
+        setSelectedSidebar(id);
+        setActiveTab('playlists');
       } else {
-        setActiveTab('now-playing');
+        setActivePlaylistId(null);
+        setPlaylistQueueIds([]);
       }
 
-      showToast(`Successfully imported ${parsedTracks.length} local file(s)`);
+      const firstIsVideo = parsedTracks[0]?.mediaType === 'video';
+      if (playlistName) {
+        showToast(`Created playlist "${playlistName}" with ${parsedTracks.length} file(s)`);
+      } else if (firstIsVideo) {
+        setActiveTab('video-player');
+        showToast(`Successfully imported ${parsedTracks.length} local file(s)`);
+      } else {
+        setActiveTab('now-playing');
+        showToast(`Successfully imported ${parsedTracks.length} local file(s)`);
+      }
     } catch (err) {
-      console.error('Failed to load local files:', err);
-      showToast('Could not load local files. Please try again.');
+      console.error('Failed to import local files:', err);
+      showToast('Could not import local files. Please try again.');
+    }
+  };
+
+  const handleLoadLocalFiles = async () => {
+    await handleImportFiles(await openLocalMediaFiles());
+  };
+
+  const handleImportFolderAsPlaylist = async () => {
+    const files = await openLocalMediaFolder();
+    if (!files.length) return;
+    const relativePath = files[0].webkitRelativePath;
+    const folderName = relativePath?.split('/')[0] || 'Imported Folder';
+    await handleImportFiles(files, folderName);
+  };
+
+  const handleCreatePlaylist = (name: string, description: string, trackIds: string[]) => {
+    const id = `playlist-${Date.now()}`;
+    const firstTrack = tracks.find((track) => track.id === trackIds[0]);
+    setPlaylists((previous) => [{
+      id,
+      name,
+      description,
+      trackIds,
+      trackCount: trackIds.length,
+      coverArt: firstTrack?.coverArt ?? '',
+      accentColor: firstTrack?.accentColor ?? '#6366f1'
+    }, ...previous]);
+    setSelectedSidebar(id);
+    showToast(`Created playlist "${name}"`);
+  };
+
+  const handleDeletePlaylist = (playlistId: string) => {
+    setPlaylists((previous) => previous.filter((playlist) => playlist.id !== playlistId));
+    if (activePlaylistId === playlistId) {
+      setActivePlaylistId(null);
+      setPlaylistQueueIds([]);
+    }
+    if (selectedSidebar === playlistId) setSelectedSidebar('playlists');
+    showToast('Playlist deleted');
+  };
+
+  const handleRenamePlaylist = (playlistId: string, name: string) => {
+    setPlaylists((previous) => previous.map((playlist) => playlist.id === playlistId ? { ...playlist, name } : playlist));
+  };
+
+  const handleUpdatePlaylistDescription = (playlistId: string, description: string) => {
+    setPlaylists((previous) => previous.map((playlist) => playlist.id === playlistId ? { ...playlist, description } : playlist));
+  };
+
+  const handleAddPlaylistTracks = (playlistId: string, trackIds: string[]) => {
+    if (!trackIds.length) return;
+    const playlist = playlists.find((item) => item.id === playlistId);
+    const nextQueueIds = playlist ? [...playlist.trackIds, ...trackIds.filter((id) => !playlist.trackIds.includes(id))] : [];
+    setPlaylists((previous) => previous.map((playlist) => {
+      if (playlist.id !== playlistId) return playlist;
+      return { ...playlist, trackIds: nextQueueIds, trackCount: nextQueueIds.length };
+    }));
+    if (activePlaylistId === playlistId) setPlaylistQueueIds(nextQueueIds);
+  };
+
+  const handleRemovePlaylistTrack = (playlistId: string, trackId: string) => {
+    const playlist = playlists.find((item) => item.id === playlistId);
+    const nextQueueIds = playlist?.trackIds.filter((id) => id !== trackId) ?? [];
+    setPlaylists((previous) => previous.map((playlist) => {
+      if (playlist.id !== playlistId) return playlist;
+      return { ...playlist, trackIds: nextQueueIds, trackCount: nextQueueIds.length };
+    }));
+    if (activePlaylistId === playlistId) setPlaylistQueueIds(nextQueueIds);
+  };
+
+  const handleMovePlaylistTrack = (playlistId: string, trackId: string, direction: -1 | 1) => {
+    const playlist = playlists.find((item) => item.id === playlistId);
+    if (!playlist) return;
+    const currentIndex = playlist.trackIds.indexOf(trackId);
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= playlist.trackIds.length) return;
+    const reorderedTrackIds = [...playlist.trackIds];
+    [reorderedTrackIds[currentIndex], reorderedTrackIds[nextIndex]] = [reorderedTrackIds[nextIndex], reorderedTrackIds[currentIndex]];
+    setPlaylists((previous) => previous.map((playlist) => {
+      if (playlist.id !== playlistId) return playlist;
+      return { ...playlist, trackIds: reorderedTrackIds };
+    }));
+    if (activePlaylistId === playlistId) setPlaylistQueueIds(reorderedTrackIds);
+  };
+
+  const handleCreateImageCollection = (name: string): string => {
+    const id = `collection-${Date.now()}`;
+    setImageCollections((previous) => [...previous, { id, name }]);
+    return id;
+  };
+
+  const handleRenameImageCollection = (collectionId: string, name: string) => {
+    setImageCollections((previous) => previous.map((collection) => collection.id === collectionId ? { ...collection, name } : collection));
+  };
+
+  const handleDeleteImageCollection = async (collectionId: string) => {
+    const collectionImages = images.filter((image) => image.collectionId === collectionId);
+    try {
+      await Promise.all(collectionImages.map((image) => deleteImage(image.id)));
+      collectionImages.forEach((image) => URL.revokeObjectURL(image.url));
+      setImages((previous) => previous.filter((image) => image.collectionId !== collectionId));
+      setImageCollections((previous) => previous.filter((collection) => collection.id !== collectionId));
+    } catch (error) {
+      console.error('Could not delete image collection:', error);
+      showToast('Could not delete this collection. Please try again.');
+    }
+  };
+
+  const handleUploadImages = async (collectionId: string, files: File[]) => {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    if (imageFiles.length !== files.length) showToast('Only image files can be added to a collection.');
+    const addedImages: ImageAsset[] = [];
+    try {
+      for (const file of imageFiles) {
+        const image: ImageAsset = {
+          id: `image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name,
+          collectionId,
+          url: URL.createObjectURL(file)
+        };
+        try {
+          await saveImage(image, file);
+          addedImages.push(image);
+        } catch (error) {
+          URL.revokeObjectURL(image.url);
+          throw error;
+        }
+      }
+      setImages((previous) => [...previous, ...addedImages]);
+      if (addedImages.length) showToast(`Added ${addedImages.length} image(s)`);
+    } catch (error) {
+      setImages((previous) => [...previous, ...addedImages]);
+      console.error('Could not save images:', error);
+      showToast(addedImages.length
+        ? `Added ${addedImages.length} image(s), but could not save the rest.`
+        : 'Could not save images. Browser storage may be full.');
+    }
+  };
+
+  const handleDeleteImage = async (imageId: string) => {
+    try {
+      await deleteImage(imageId);
+      setImages((previous) => {
+        const image = previous.find((item) => item.id === imageId);
+        if (image) URL.revokeObjectURL(image.url);
+        return previous.filter((item) => item.id !== imageId);
+      });
+    } catch (error) {
+      console.error('Could not delete image:', error);
+      showToast('Could not delete this image. Please try again.');
     }
   };
 
@@ -852,7 +1147,7 @@ export default function App() {
           onCloseMobileNav={() => setIsMobileNavOpen(false)}
           onOpenEqualizer={() => setShowEqualizerModal(true)}
           onSearch={handleNavigateToSearch}
-          playlists={MOCK_PLAYLISTS}
+          playlists={playlists}
           selectedSidebar={selectedSidebar}
           setActiveTab={setActiveTab}
           setSelectedSidebar={setSelectedSidebar}
@@ -878,7 +1173,7 @@ export default function App() {
           />
 
           {/* TAB 1: NOW PLAYING (IMMERSIVE SHOWCASE HERO) */}
-          {activeTab === 'now-playing' && currentTrack.mediaType !== 'video' && (
+          {activeTab === 'now-playing' && selectedSidebar !== 'spotify' && currentTrack.mediaType !== 'video' && (
             <div className="relative z-10 flex-1 flex flex-col justify-between overflow-y-auto px-6 lg:px-12 xl:px-16 py-6 animate-fadeIn">
               <section className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 xl:gap-14 my-auto">
                 {/* Left: Album Artwork with Glow & Playback badge */}
@@ -1026,7 +1321,7 @@ export default function App() {
           )}
 
           {/* VIDEO PLAYER VIEW */}
-          {(activeTab === 'video-player' || currentTrack.mediaType === 'video') && activeTab !== 'file-browser' && activeTab !== 'visualizer' && activeTab !== 'albums' && activeTab !== 'playlists' && (
+          {(activeTab === 'video-player' || currentTrack.mediaType === 'video') && activeTab !== 'file-browser' && activeTab !== 'visualizer' && activeTab !== 'albums' && activeTab !== 'playlists' && activeTab !== 'spotify' && activeTab !== 'images' && selectedSidebar !== 'spotify' && (
             <VideoPlayerView
               track={currentTrack}
               videoRef={videoRef}
@@ -1254,53 +1549,45 @@ export default function App() {
 
           {/* TAB 5: PLAYLISTS */}
           {activeTab === 'playlists' && (
-            <div className="flex-1 space-y-6 overflow-y-auto p-4 animate-fadeIn sm:p-6 lg:p-8">
-              <div>
-                <h2 className="text-2xl font-black uppercase tracking-tight text-white">
-                  Curated DSP Playlists
-                </h2>
-                <p className="text-xs text-zinc-400">Handcrafted audio atmospheres</p>
-              </div>
+            <PlaylistsView
+              onCreate={handleCreatePlaylist}
+              onDelete={handleDeletePlaylist}
+              onImportFolder={handleImportFolderAsPlaylist}
+              onMoveTrack={handleMovePlaylistTrack}
+              onPlayTrack={(trackId) => {
+                const playlist = playlists.find((item) => item.id === selectedSidebar);
+                if (playlist) {
+                  handlePlayPlaylistTrack(playlist.id, trackId);
+                } else {
+                  const index = tracks.findIndex((track) => track.id === trackId);
+                  if (index >= 0) handlePlayTrack(index);
+                }
+              }}
+              onRemoveTrack={handleRemovePlaylistTrack}
+              onRename={handleRenamePlaylist}
+              onUpdateDescription={handleUpdatePlaylistDescription}
+              onSelect={setSelectedSidebar}
+              onAddTracks={handleAddPlaylistTracks}
+              playlists={playlists}
+              selectedPlaylistId={playlists.some((playlist) => playlist.id === selectedSidebar) ? selectedSidebar : null}
+              tracks={tracks}
+            />
+          )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                {MOCK_PLAYLISTS.map((pl) => (
-                  <div
-                    key={pl.id}
-                    onClick={() => setActiveTab('now-playing')}
-                    className="p-5 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-indigo-500/40 transition-all cursor-pointer group flex flex-col gap-4"
-                  >
-                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-zinc-800 relative">
-                      <img
-                        src={pl.coverArt}
-                        alt={pl.name}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg">
-                          <Play className="w-6 h-6 fill-white ml-0.5" />
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: pl.accentColor }}
-                        />
-                        <h3 className="font-bold text-sm text-zinc-100 truncate">{pl.name}</h3>
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-1 leading-relaxed line-clamp-2">
-                        {pl.description}
-                      </p>
-                      <p className="text-[10px] font-mono text-zinc-500 mt-2">
-                        {pl.trackCount} Tracks in Queue
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {activeTab === 'now-playing' && selectedSidebar === 'spotify' && (
+            <SpotifyView />
+          )}
+
+          {activeTab === 'images' && (
+            <ImagesView
+              collections={imageCollections}
+              images={images}
+              onCreateCollection={handleCreateImageCollection}
+              onDeleteCollection={handleDeleteImageCollection}
+              onDeleteImage={handleDeleteImage}
+              onRenameCollection={handleRenameImageCollection}
+              onUploadImages={handleUploadImages}
+            />
           )}
         </main>
 

@@ -18,7 +18,9 @@ function getViewTitle(activeTab: PlayerView): string {
   if (activeTab === 'file-browser') return 'Your Library';
   if (activeTab === 'visualizer') return 'Visualizer';
   if (activeTab === 'albums') return 'Albums';
-  return 'Playlists';
+  if (activeTab === 'playlists') return 'Playlists';
+  if (activeTab === 'spotify') return 'Spotify';
+  return 'Images';
 }
 
 export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
