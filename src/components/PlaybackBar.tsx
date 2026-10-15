@@ -8,6 +8,7 @@ import {
   Play,
   Repeat,
   Repeat1,
+  Square,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -21,6 +22,7 @@ import { MiniVisualizer } from './MiniVisualizer';
 
 interface PlaybackBarProps {
   analyserNode: AnalyserNode | null;
+  embedded?: boolean;
   currentTime: number;
   effectiveDuration: number;
   isMuted: boolean;
@@ -32,6 +34,7 @@ interface PlaybackBarProps {
   onOpenShortcuts: () => void;
   onPreviousTrack: () => void;
   onSeek: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onStop: () => void;
   onSetPlaybackSpeed: (speed: number) => void;
   onSetVolume: (volume: number) => void;
   onShowNowPlaying: () => void;
@@ -61,6 +64,7 @@ function formatTime(seconds: number): string {
 
 export const PlaybackBar: React.FC<PlaybackBarProps> = ({
   analyserNode,
+  embedded = false,
   currentTime,
   effectiveDuration,
   isMuted,
@@ -83,6 +87,7 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
   onToggleQueue,
   onToggleRepeat,
   onToggleShuffle,
+  onStop,
   onStartScrubbing,
   onStopScrubbing,
   playbackSpeed,
@@ -93,11 +98,17 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
 }) => (
   <footer
     id="bottom-playback-bar"
-    className="relative z-30 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 border-t border-white/[0.08] bg-[#0b0d12]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none md:flex md:h-24 md:justify-between md:gap-4 md:px-6 md:py-0 xl:px-8"
+    aria-label="Playback controls"
+    className={embedded
+      ? 'relative z-20 mx-auto my-6 grid w-full max-w-3xl shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 rounded-2xl border border-white/[0.12] bg-white/[0.075] p-4 shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none'
+      : 'relative z-30 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 border-t border-white/[0.08] bg-[#0b0d12]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none md:flex md:h-24 md:justify-between md:gap-4 md:px-6 md:py-0 xl:px-8'}
   >
     <div className="pointer-events-none absolute -top-px left-0 right-0 h-px bg-white/[0.06]" />
 
-    <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2.5 md:w-[28%]">
+    <div className={embedded
+      ? 'col-start-1 row-start-1 flex min-w-0 items-center gap-2.5'
+      : 'col-start-1 row-start-1 flex min-w-0 items-center gap-2.5 md:w-[28%]'}
+    >
       <button
         className="relative shrink-0 overflow-hidden rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
         onClick={onShowNowPlaying}
@@ -143,7 +154,10 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
       </button>
     </div>
 
-    <div className="col-span-2 row-start-2 flex min-w-0 flex-col items-center gap-1 md:w-[44%] md:min-w-[250px] md:max-w-xl">
+    <div className={embedded
+      ? 'col-span-2 row-start-2 flex min-w-0 flex-col items-center gap-1'
+      : 'col-span-2 row-start-2 flex min-w-0 flex-col items-center gap-1 md:w-[44%] md:min-w-[250px] md:max-w-xl'}
+    >
       <div className="flex items-center gap-2 md:gap-4">
         <button
           onClick={onToggleShuffle}
@@ -161,6 +175,14 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
           aria-label="Previous track"
         >
           <SkipBack className="h-5 w-5 fill-current" />
+        </button>
+        <button
+          onClick={onStop}
+          className="rounded-full p-2 text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white"
+          title="Stop and return to the beginning"
+          aria-label="Stop"
+        >
+          <Square className="h-4 w-4 fill-current" />
         </button>
         <button
           onClick={onTogglePlay}
@@ -212,7 +234,10 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
       </div>
     </div>
 
-    <div className="col-start-2 row-start-1 flex items-center justify-end gap-1 md:w-[28%] md:gap-2">
+    <div className={embedded
+      ? 'col-start-2 row-start-1 flex items-center justify-end gap-1 md:gap-2'
+      : 'col-start-2 row-start-1 flex items-center justify-end gap-1 md:w-[28%] md:gap-2'}
+    >
       <select
         value={playbackSpeed}
         onChange={(event) => onSetPlaybackSpeed(Number(event.target.value))}

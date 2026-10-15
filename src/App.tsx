@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Play,
-  Pause,
   Heart,
   ListMusic,
   Folder,
@@ -15,8 +14,6 @@ import {
   Film,
   CheckCircle2,
   AlertCircle,
-  Volume2,
-  VolumeX
 } from 'lucide-react';
 import { Track, Playlist, Album, EqualizerPreset, PlayerView, ImageAsset, ImageCollection } from './types';
 import { openLocalMediaFiles, openLocalMediaFolder, parseFileToTrack, formatBytes } from './utils/filePicker';
@@ -600,20 +597,30 @@ export default function App() {
     const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
     if (!el) return;
 
-    if (currentTrack.mediaUrl) {
-      el.src = currentTrack.mediaUrl;
-      el.playbackRate = playbackSpeed;
-      el.volume = isMuted ? 0 : volume / 100;
-      el.muted = isMuted;
-
-      if (isPlaying) {
-        el.play().catch((e) => {
-          console.log('Autoplay prevented or waiting for user interaction:', e);
-          setIsPlaying(false);
-        });
-      }
+    if (!currentTrack.mediaUrl) {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+      if (isPlaying) setIsPlaying(false);
+      return;
     }
-  }, [currentTrackIndex, currentTrack.mediaUrl, currentTrack.mediaType]);
+
+    if (el.getAttribute('src') !== currentTrack.mediaUrl) {
+      el.pause();
+      el.src = currentTrack.mediaUrl;
+      el.load();
+    }
+
+    if (isPlaying) {
+      el.play().catch((error: unknown) => {
+        console.error('Could not start playback:', error);
+        setIsPlaying(false);
+        showToast('Playback could not start. Check that the media file is still available.');
+      });
+    } else {
+      el.pause();
+    }
+  }, [currentTrackIndex, currentTrack.mediaUrl, currentTrack.mediaType, isPlaying, showToast]);
 
   // Volume & Speed Sync
   useEffect(() => {
@@ -631,6 +638,10 @@ export default function App() {
   const handleTogglePlay = useCallback(() => {
     const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
     if (!el) return;
+    if (!currentTrack.mediaUrl) {
+      showToast('This track is still loading. Try again in a moment.');
+      return;
+    }
 
     // Resume AudioContext if suspended
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
@@ -648,11 +659,20 @@ export default function App() {
           setIsPlaying(true);
         })
         .catch((err) => {
-          console.warn('Play error:', err);
+          console.error('Could not start playback:', err);
           setIsPlaying(false);
+          showToast('Playback could not start. Check that the media file is still available.');
         });
     }
-  }, [currentTrack.mediaType, isPlaying, initWebAudio]);
+  }, [currentTrack.mediaType, currentTrack.mediaUrl, isPlaying, initWebAudio, showToast]);
+
+  const handleStop = useCallback(() => {
+    const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
+    el?.pause();
+    if (el) el.currentTime = 0;
+    setCurrentTime(0);
+    setIsPlaying(false);
+  }, [currentTrack.mediaType]);
 
   const handlePlayTrack = useCallback((index: number) => {
     setActivePlaylistId(null);
@@ -1043,11 +1063,17 @@ export default function App() {
       const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
       if (el) {
         el.currentTime = 0;
-        el.play();
+        el.play().catch((error: unknown) => {
+          console.error('Could not repeat the current track:', error);
+          setIsPlaying(false);
+          showToast('Playback could not continue. Check that the media file is still available.');
+        });
       }
     } else if (repeatMode === 'all') {
       handleNextTrack();
     } else {
+      const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
+      if (el) el.currentTime = 0;
       setIsPlaying(false);
       setCurrentTime(0);
     }
@@ -1081,6 +1107,51 @@ export default function App() {
 
   const effectiveDuration = duration > 0 ? duration : currentTrack.duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
+  const renderPlaybackBar = (embedded = false) => (
+    <PlaybackBar
+      analyserNode={analyserRef.current}
+      embedded={embedded}
+      currentTime={currentTime}
+      effectiveDuration={effectiveDuration}
+      isMuted={isMuted}
+      isPlaying={isPlaying}
+      isQueueOpen={showQueueDrawer}
+      isShuffle={isShuffle}
+      onNextTrack={handleNextTrack}
+      onOpenEqualizer={() => setShowEqualizerModal(true)}
+      onOpenShortcuts={() => setShowShortcutsModal(true)}
+      onPreviousTrack={handlePrevTrack}
+      onSeek={handleSeek}
+      onStop={handleStop}
+      onSetPlaybackSpeed={setPlaybackSpeed}
+      onSetVolume={(nextVolume) => {
+        setVolume(nextVolume);
+        if (isMuted) setIsMuted(false);
+      }}
+      onShowNowPlaying={() => {
+        setSelectedSidebar('home');
+        setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing');
+      }}
+      onShowVisualizer={() => {
+        setSelectedSidebar('visualizer');
+        setActiveTab('visualizer');
+      }}
+      onToggleFavorite={(trackId) => handleToggleFavorite(trackId)}
+      onToggleFullscreen={handleToggleFullscreen}
+      onToggleMute={toggleMute}
+      onTogglePlay={handleTogglePlay}
+      onToggleQueue={() => setShowQueueDrawer((open) => !open)}
+      onToggleRepeat={toggleRepeat}
+      onToggleShuffle={() => setIsShuffle((shuffle) => !shuffle)}
+      onStartScrubbing={() => { isDraggingScrubber.current = true; }}
+      onStopScrubbing={() => { isDraggingScrubber.current = false; }}
+      playbackSpeed={playbackSpeed}
+      progressPercent={progressPercent}
+      repeatMode={repeatMode}
+      track={currentTrack}
+      volume={volume}
+    />
+  );
 
   return (
     <div
@@ -1221,7 +1292,7 @@ export default function App() {
         {/* ==========================================
             CENTER MAIN CANVAS (IMMERSIVE THEME)
             ========================================== */}
-        <main className="relative flex flex-1 flex-col overflow-hidden bg-[#090b10]">
+        <main className="relative flex flex-1 flex-col overflow-y-auto bg-[#090b10]">
           {/* Radial ambient background highlight */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(129,140,248,0.13),transparent_70%)] pointer-events-none" />
 
@@ -1277,109 +1348,13 @@ export default function App() {
                   }}
                 />
               </div>
-
-              <section
-                aria-label="Local playback controls"
-                className="relative z-20 mx-auto -mt-1 mb-5 flex w-[min(92%,42rem)] shrink-0 flex-col gap-3 rounded-2xl border border-white/[0.12] bg-white/[0.075] px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl sm:flex-row sm:items-center sm:gap-4 sm:px-5"
-              >
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <img
-                    src={currentTrack.coverArt}
-                    alt=""
-                    aria-hidden="true"
-                    referrerPolicy="no-referrer"
-                    className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-white">{currentTrack.title}</p>
-                    <p className="truncate text-[11px] text-zinc-400">{currentTrack.artist}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleMute}
-                    className="rounded-full p-2 text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
-                    aria-label={isMuted ? 'Unmute playback' : 'Mute playback'}
-                    title={isMuted ? 'Unmute' : 'Mute'}
-                  >
-                    {isMuted || volume === 0
-                      ? <VolumeX className="h-4 w-4" />
-                      : <Volume2 className="h-4 w-4" />}
-                  </button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={isMuted ? 0 : volume}
-                    onChange={(event) => {
-                      setVolume(Number(event.target.value));
-                      if (isMuted) setIsMuted(false);
-                    }}
-                    className="hidden w-20 accent-indigo-300 sm:block"
-                    aria-label="Playback volume"
-                  />
-                </div>
-
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleTogglePlay}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-950 shadow-lg transition-transform hover:scale-105 active:scale-95"
-                    aria-label={isPlaying ? 'Pause' : 'Play'}
-                    title={isPlaying ? 'Pause' : 'Play'}
-                  >
-                    {isPlaying
-                      ? <Pause className="h-4 w-4 fill-current" />
-                      : <Play className="ml-0.5 h-4 w-4 fill-current" />}
-                  </button>
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="w-8 text-right text-[10px] tabular-nums text-zinc-500">
-                      {formatTime(currentTime)}
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={effectiveDuration}
-                      step={0.1}
-                      value={currentTime}
-                      onChange={handleSeek}
-                      onPointerDown={() => { isDraggingScrubber.current = true; }}
-                      onPointerUp={() => { isDraggingScrubber.current = false; }}
-                      onPointerCancel={() => { isDraggingScrubber.current = false; }}
-                      className="playback-range h-4 min-w-0 flex-1 cursor-pointer rounded-lg focus:outline-none"
-                      style={{ '--range-progress': `${progressPercent}%` } as React.CSSProperties}
-                      aria-label="Track progress"
-                    />
-                    <span className="w-8 text-[10px] tabular-nums text-zinc-500">
-                      {formatTime(effectiveDuration)}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedSidebar('visualizer');
-                      setActiveTab('visualizer');
-                    }}
-                    className="hidden rounded-lg p-2 text-zinc-300 transition-colors hover:bg-white/10 hover:text-indigo-200 sm:block"
-                    aria-label="Open visualizer"
-                    title="Open visualizer"
-                  >
-                    <MiniVisualizer
-                      isPlaying={isPlaying}
-                      accentColor={currentTrack.accentColor}
-                      analyserNode={analyserRef.current}
-                      bars={5}
-                      className="h-4 w-8"
-                    />
-                  </button>
-                </div>
-              </section>
             </>
           )}
 
           {/* TAB 1: NOW PLAYING (IMMERSIVE SHOWCASE HERO) */}
           {activeTab === 'now-playing' && selectedSidebar === 'home' && currentTrack.mediaType !== 'video' && (
-            <div className="relative z-10 flex-1 flex flex-col justify-between overflow-y-auto px-6 lg:px-12 xl:px-16 py-6 animate-fadeIn">
-              <section className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 xl:gap-14 my-auto">
+            <div className="relative z-10 flex w-full flex-col px-6 py-6 animate-fadeIn lg:px-12 xl:px-16">
+              <section className="flex flex-col items-center justify-center gap-8 lg:flex-row xl:gap-14">
                 {/* Left: Album Artwork with Glow & Playback badge */}
                 <div className="relative group flex-shrink-0">
                   <div
@@ -1394,12 +1369,15 @@ export default function App() {
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-black/10" />
+                    <div className="pointer-events-none absolute inset-0 bg-black/10" />
 
                     {/* Centered glass playback badge */}
-                    <div
+                    <button
+                      type="button"
                       onClick={handleTogglePlay}
-                      className="relative flex flex-col items-center gap-3 cursor-pointer group/badge"
+                      className="group/badge absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
+                      aria-label={isPlaying ? 'Pause playback' : 'Play playback'}
+                      title={isPlaying ? 'Pause playback' : 'Play playback'}
                     >
                       <div className="w-16 h-16 lg:w-20 lg:h-20 bg-white/10 rounded-full border border-white/20 backdrop-blur-md flex items-center justify-center shadow-lg group-hover/badge:scale-110 group-hover/badge:bg-white/20 transition-all">
                         {isPlaying ? (
@@ -1413,7 +1391,7 @@ export default function App() {
                       <p className="text-[11px] font-bold tracking-widest text-white/70 uppercase group-hover/badge:text-white">
                         {isPlaying ? 'Playback Active' : 'Click to Play'}
                       </p>
-                    </div>
+                    </button>
                   </div>
                 </div>
 
@@ -1493,6 +1471,8 @@ export default function App() {
                 </div>
               </section>
 
+              {renderPlaybackBar(true)}
+
               {/* Synced Lyrics Drawer (Collapsible) */}
               {showLyricsPanel && currentTrack.lyrics && (
                 <div className="p-6 rounded-2xl bg-zinc-900/60 border border-white/5 backdrop-blur-md transition-all my-4 max-w-2xl mx-auto w-full">
@@ -1539,6 +1519,11 @@ export default function App() {
               isMuted={isMuted}
               onToggleMute={toggleMute}
             />
+          )}
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && currentTrack.mediaType === 'video' && (
+            <div className="relative z-10 shrink-0 px-6 pb-6 lg:px-12 xl:px-16">
+              {renderPlaybackBar(true)}
+            </div>
           )}
 
           {/* TAB 2: FILE BROWSER (IMMERSIVE EXPLORER) */}
@@ -1873,47 +1858,7 @@ export default function App() {
 
       {!(activeTab === 'now-playing' && selectedSidebar === 'home')
         && !(activeTab === 'now-playing' && selectedSidebar === 'spotify') && (
-        <PlaybackBar
-          analyserNode={analyserRef.current}
-          currentTime={currentTime}
-          effectiveDuration={effectiveDuration}
-          isMuted={isMuted}
-          isPlaying={isPlaying}
-          isQueueOpen={showQueueDrawer}
-          isShuffle={isShuffle}
-          onNextTrack={handleNextTrack}
-          onOpenEqualizer={() => setShowEqualizerModal(true)}
-          onOpenShortcuts={() => setShowShortcutsModal(true)}
-          onPreviousTrack={handlePrevTrack}
-          onSeek={handleSeek}
-          onSetPlaybackSpeed={setPlaybackSpeed}
-          onSetVolume={(nextVolume) => {
-            setVolume(nextVolume);
-            if (isMuted) setIsMuted(false);
-          }}
-          onShowNowPlaying={() => {
-            setSelectedSidebar('home');
-            setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing');
-          }}
-          onShowVisualizer={() => {
-            setSelectedSidebar('visualizer');
-            setActiveTab('visualizer');
-          }}
-          onToggleFavorite={(trackId) => handleToggleFavorite(trackId)}
-          onToggleFullscreen={handleToggleFullscreen}
-          onToggleMute={toggleMute}
-          onTogglePlay={handleTogglePlay}
-          onToggleQueue={() => setShowQueueDrawer((open) => !open)}
-          onToggleRepeat={toggleRepeat}
-          onToggleShuffle={() => setIsShuffle((shuffle) => !shuffle)}
-          onStartScrubbing={() => { isDraggingScrubber.current = true; }}
-          onStopScrubbing={() => { isDraggingScrubber.current = false; }}
-          playbackSpeed={playbackSpeed}
-          progressPercent={progressPercent}
-          repeatMode={repeatMode}
-          track={currentTrack}
-          volume={volume}
-        />
+        renderPlaybackBar()
       )}
 
       {/* =========================================================
