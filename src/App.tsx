@@ -43,6 +43,7 @@ import { PlaylistsView } from './components/PlaylistsView';
 import { ImagesView } from './components/ImagesView';
 import { SpotifyView } from './components/SpotifyView';
 import { MagneticLogo } from './components/MagneticLogo';
+import { InteractivePhoenixHero } from './components/InteractivePhoenixHero';
 import { RotationalHub, type RotationalHubDestination } from './components/RotationalHub';
 
 // ==========================================
@@ -1129,7 +1130,7 @@ export default function App() {
             <>
               <div className="relative z-10 flex shrink-0 flex-col items-center px-4">
                 <div className="mb-1 flex items-center gap-3">
-                  <MagneticLogo audioLevel={audioLevel} size={40} className="rounded-xl" />
+                  <InteractivePhoenixHero audioLevel={audioLevel} size={72} />
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200/90">
                       Phoenix Player

@@ -94,3 +94,35 @@ input[type="range"]:focus-visible {
   outline: 2px solid rgba(165, 180, 252, 0.65);
   outline-offset: 3px;
 }
+
+.interactive-phoenix-hero {
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  --hue-shift: 0deg;
+  --glow-x: 0px;
+  --glow-y: 0px;
+  --glow-blur: 12px;
+  --effect-opacity: 0;
+}
+
+.interactive-phoenix-hero__art {
+  display: block;
+  overflow: visible;
+  filter:
+    hue-rotate(var(--hue-shift))
+    drop-shadow(var(--glow-x) var(--glow-y) var(--glow-blur) rgba(249, 115, 22, 0.7))
+    drop-shadow(0 0 var(--glow-blur) rgba(217, 70, 239, 0.42));
+  transition: filter 120ms linear;
+}
+
+.interactive-phoenix-hero__liquid {
+  opacity: var(--effect-opacity);
+  transition: opacity 120ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interactive-phoenix-hero__art,
+  .interactive-phoenix-hero__liquid {
+    transition: none;
+  }
+}
