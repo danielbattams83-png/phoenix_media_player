@@ -1129,13 +1129,13 @@ export default function App() {
           {activeTab === 'now-playing' && selectedSidebar === 'home' && (
             <>
               <div className="relative z-10 flex shrink-0 flex-col items-center px-4">
-                <div className="mb-1 flex items-center gap-3">
-                  <InteractivePhoenixHero audioLevel={audioLevel} size={72} />
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200/90">
+                <div className="flex flex-col items-center text-center">
+                  <InteractivePhoenixHero audioLevel={audioLevel} size={280} />
+                  <div className="mt-2">
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-200/90">
                       Phoenix Player
                     </p>
-                    <p className="mt-1 text-[11px] text-zinc-500">
+                    <p className="mt-1 text-xs text-zinc-500">
                       Choose a listening space
                     </p>
                   </div>
