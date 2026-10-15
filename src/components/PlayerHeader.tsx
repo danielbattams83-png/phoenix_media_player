@@ -20,6 +20,7 @@ function getViewTitle(activeTab: PlayerView): string {
   if (activeTab === 'albums') return 'Albums';
   if (activeTab === 'playlists') return 'Playlists';
   if (activeTab === 'spotify') return 'Spotify';
+  if (activeTab === 'youtube') return 'YouTube';
   return 'Images';
 }
 

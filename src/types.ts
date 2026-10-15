@@ -1,5 +1,5 @@
 export type MediaFormat = 'FLAC' | 'MP3' | 'WAV' | 'AAC' | 'OGG' | 'M4A' | 'MP4' | 'WEBM';
-export type PlayerView = 'now-playing' | 'file-browser' | 'visualizer' | 'albums' | 'playlists' | 'video-player' | 'spotify' | 'images';
+export type PlayerView = 'now-playing' | 'file-browser' | 'visualizer' | 'albums' | 'playlists' | 'video-player' | 'spotify' | 'youtube' | 'images';
 
 export interface Track {
   id: string;

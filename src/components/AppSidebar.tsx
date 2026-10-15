@@ -13,9 +13,11 @@ import {
   X
 } from 'lucide-react';
 import type { Playlist, PlayerView, Track } from '../types';
+import { MagneticLogo } from './MagneticLogo';
 
 interface AppSidebarProps {
   activeTab: PlayerView;
+  audioLevel?: number;
   currentTrackIsVideo: boolean;
   isMobileNavOpen: boolean;
   onCloseMobileNav: () => void;
@@ -30,6 +32,7 @@ interface AppSidebarProps {
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
   activeTab,
+  audioLevel = 0,
   currentTrackIsVideo,
   isMobileNavOpen,
   onCloseMobileNav,
@@ -72,12 +75,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       >
         <div className="flex items-center justify-between gap-3 px-1">
           <div className="flex min-w-0 items-center gap-3">
-            <img
-              src="/icon-512.png"
-              alt=""
-              aria-hidden="true"
-              className="h-9 w-9 rounded-xl object-contain"
-            />
+            <MagneticLogo audioLevel={audioLevel} size={36} className="rounded-xl" />
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold tracking-tight text-white">
                 Phoenix Media Player

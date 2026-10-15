@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Play,
+  Pause,
   Heart,
   ListMusic,
   Folder,
@@ -13,7 +14,9 @@ import {
   Menu,
   Film,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { Track, Playlist, Album, EqualizerPreset, PlayerView, ImageAsset, ImageCollection } from './types';
 import { openLocalMediaFiles, openLocalMediaFolder, parseFileToTrack, formatBytes } from './utils/filePicker';
@@ -43,6 +46,8 @@ import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
 import { PlaylistsView } from './components/PlaylistsView';
 import { ImagesView } from './components/ImagesView';
 import { SpotifyView } from './components/SpotifyView';
+import { MagneticLogo } from './components/MagneticLogo';
+import { RotationalHub, type RotationalHubDestination } from './components/RotationalHub';
 
 // ==========================================
 // UTILITY FUNCTIONS
@@ -262,6 +267,10 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.has('code') || params.has('error') ? 'spotify' : 'home';
   });
+  const [activePlayerMode, setActivePlayerMode] = useState<RotationalHubDestination>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has('code') || params.has('error') ? 'spotify' : 'local-files';
+  });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [showQueueDrawer, setShowQueueDrawer] = useState<boolean>(false);
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false);
@@ -285,6 +294,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(30);
+  const [audioLevel, setAudioLevel] = useState<number>(0);
   const [volume, setVolume] = useState<number>(75);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
@@ -309,6 +319,24 @@ export default function App() {
 
   const currentTrack = tracks[currentTrackIndex] || tracks[0];
 
+  useEffect(() => {
+    if (activeTab === 'youtube') {
+      setActivePlayerMode('youtube');
+      audioRef.current?.pause();
+      videoRef.current?.pause();
+      setIsPlaying(false);
+    } else if (activeTab === 'file-browser') {
+      setActivePlayerMode('local-files');
+    } else if (activeTab === 'now-playing' && selectedSidebar === 'spotify') {
+      setActivePlayerMode('spotify');
+      audioRef.current?.pause();
+      videoRef.current?.pause();
+      setIsPlaying(false);
+    } else if (activeTab === 'now-playing' && selectedSidebar === 'home') {
+      setActivePlayerMode('local-files');
+    }
+  }, [activeTab, selectedSidebar]);
+
   // ==========================================
   // TOAST NOTIFICATIONS
   // ==========================================
@@ -329,6 +357,12 @@ export default function App() {
   const handleSearchFocus = () => {
     setSelectedSidebar('search');
     setActiveTab('file-browser');
+  };
+
+  const handleLogoHome = () => {
+    setSelectedSidebar('home');
+    setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing');
+    setIsMobileNavOpen(false);
   };
 
   useEffect(() => {
@@ -524,6 +558,26 @@ export default function App() {
       console.warn('Web Audio Graph initialization note:', err);
     }
   }, [currentTrack.mediaType, eqBands]);
+
+  useEffect(() => {
+    const analyser = analyserRef.current;
+    if (!isPlaying || isMuted || !analyser) {
+      setAudioLevel(0);
+      return;
+    }
+
+    const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    const intervalId = window.setInterval(() => {
+      analyser.getByteFrequencyData(frequencyData);
+      const average = frequencyData.reduce((sum, value) => sum + value, 0) / frequencyData.length;
+      setAudioLevel(Math.min(1, average / 255));
+    }, 50);
+
+    return () => {
+      window.clearInterval(intervalId);
+      setAudioLevel(0);
+    };
+  }, [isPlaying, isMuted, currentTrack.mediaType]);
 
   // Update EQ filters when eqBands change
   useEffect(() => {
@@ -1092,7 +1146,8 @@ export default function App() {
           ========================================================= */}
       <header
         id="title-bar"
-        className="z-30 flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#0b0d12]/75 px-3 backdrop-blur-xl select-none sm:px-4"
+        className="sticky top-0 z-30 flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] px-3 backdrop-blur-xl select-none sm:px-4"
+        style={{ backgroundColor: 'rgba(18, 18, 18, 0.6)', backdropFilter: 'blur(16px)' }}
       >
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
@@ -1105,10 +1160,18 @@ export default function App() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <img src="/icon-512.png" alt="" aria-hidden="true" className="h-7 w-7 rounded-lg object-contain" />
-          <span className="truncate text-xs font-semibold tracking-wide text-zinc-300 sm:text-sm">
-            Phoenix Media Player
-          </span>
+          <button
+            type="button"
+            onClick={handleLogoHome}
+            className="flex min-w-0 items-center gap-2 rounded-lg text-left transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:gap-3"
+            title="Go to home"
+            aria-label="Go to Phoenix Media Player home"
+          >
+            <MagneticLogo audioLevel={audioLevel} size={28} className="rounded-lg" />
+            <span className="truncate text-xs font-semibold tracking-wide text-zinc-300 sm:text-sm">
+              Phoenix Media Player
+            </span>
+          </button>
         </div>
 
         {/* Drag Region with live play state */}
@@ -1142,6 +1205,7 @@ export default function App() {
       <div className="relative flex-1 flex overflow-hidden">
         <AppSidebar
           activeTab={activeTab}
+          audioLevel={audioLevel}
           currentTrackIsVideo={currentTrack.mediaType === 'video'}
           isMobileNavOpen={isMobileNavOpen}
           onCloseMobileNav={() => setIsMobileNavOpen(false)}
@@ -1172,8 +1236,148 @@ export default function App() {
             onSearchFocus={handleSearchFocus}
           />
 
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && (
+            <>
+              <div className="relative z-10 flex shrink-0 flex-col items-center px-4">
+                <div className="mb-1 flex items-center gap-3">
+                  <MagneticLogo audioLevel={audioLevel} size={40} className="rounded-xl" />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200/90">
+                      Phoenix Player
+                    </p>
+                    <p className="mt-1 text-[11px] text-zinc-500">
+                      Choose a listening space
+                    </p>
+                  </div>
+                </div>
+                <RotationalHub
+                  initialDestination={activePlayerMode}
+                  onSelectMode={(destination) => {
+                    setActivePlayerMode(destination);
+                  }}
+                  onActivateMode={(destination) => {
+                    switch (destination) {
+                      case 'local-files':
+                        setSelectedSidebar('tracks');
+                        setActiveTab('file-browser');
+                        break;
+                      case 'spotify':
+                        setSelectedSidebar('spotify');
+                        setActiveTab('now-playing');
+                        break;
+                      case 'youtube':
+                        setSelectedSidebar('youtube');
+                        setActiveTab('youtube');
+                        break;
+                      case 'equalizer':
+                        setSelectedSidebar('home');
+                        setShowEqualizerModal(true);
+                        break;
+                    }
+                  }}
+                />
+              </div>
+
+              <section
+                aria-label="Local playback controls"
+                className="relative z-20 mx-auto -mt-1 mb-5 flex w-[min(92%,42rem)] shrink-0 flex-col gap-3 rounded-2xl border border-white/[0.12] bg-white/[0.075] px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl sm:flex-row sm:items-center sm:gap-4 sm:px-5"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <img
+                    src={currentTrack.coverArt}
+                    alt=""
+                    aria-hidden="true"
+                    referrerPolicy="no-referrer"
+                    className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-white">{currentTrack.title}</p>
+                    <p className="truncate text-[11px] text-zinc-400">{currentTrack.artist}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    className="rounded-full p-2 text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label={isMuted ? 'Unmute playback' : 'Mute playback'}
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted || volume === 0
+                      ? <VolumeX className="h-4 w-4" />
+                      : <Volume2 className="h-4 w-4" />}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={isMuted ? 0 : volume}
+                    onChange={(event) => {
+                      setVolume(Number(event.target.value));
+                      if (isMuted) setIsMuted(false);
+                    }}
+                    className="hidden w-20 accent-indigo-300 sm:block"
+                    aria-label="Playback volume"
+                  />
+                </div>
+
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleTogglePlay}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-950 shadow-lg transition-transform hover:scale-105 active:scale-95"
+                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                    title={isPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isPlaying
+                      ? <Pause className="h-4 w-4 fill-current" />
+                      : <Play className="ml-0.5 h-4 w-4 fill-current" />}
+                  </button>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="w-8 text-right text-[10px] tabular-nums text-zinc-500">
+                      {formatTime(currentTime)}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={effectiveDuration}
+                      step={0.1}
+                      value={currentTime}
+                      onChange={handleSeek}
+                      onPointerDown={() => { isDraggingScrubber.current = true; }}
+                      onPointerUp={() => { isDraggingScrubber.current = false; }}
+                      onPointerCancel={() => { isDraggingScrubber.current = false; }}
+                      className="playback-range h-4 min-w-0 flex-1 cursor-pointer rounded-lg focus:outline-none"
+                      style={{ '--range-progress': `${progressPercent}%` } as React.CSSProperties}
+                      aria-label="Track progress"
+                    />
+                    <span className="w-8 text-[10px] tabular-nums text-zinc-500">
+                      {formatTime(effectiveDuration)}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSidebar('visualizer');
+                      setActiveTab('visualizer');
+                    }}
+                    className="hidden rounded-lg p-2 text-zinc-300 transition-colors hover:bg-white/10 hover:text-indigo-200 sm:block"
+                    aria-label="Open visualizer"
+                    title="Open visualizer"
+                  >
+                    <MiniVisualizer
+                      isPlaying={isPlaying}
+                      accentColor={currentTrack.accentColor}
+                      analyserNode={analyserRef.current}
+                      bars={5}
+                      className="h-4 w-8"
+                    />
+                  </button>
+                </div>
+              </section>
+            </>
+          )}
+
           {/* TAB 1: NOW PLAYING (IMMERSIVE SHOWCASE HERO) */}
-          {activeTab === 'now-playing' && selectedSidebar !== 'spotify' && currentTrack.mediaType !== 'video' && (
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && currentTrack.mediaType !== 'video' && (
             <div className="relative z-10 flex-1 flex flex-col justify-between overflow-y-auto px-6 lg:px-12 xl:px-16 py-6 animate-fadeIn">
               <section className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 xl:gap-14 my-auto">
                 {/* Left: Album Artwork with Glow & Playback badge */}
@@ -1578,6 +1782,25 @@ export default function App() {
             <SpotifyView />
           )}
 
+          {activeTab === 'youtube' && (
+            <section className="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center animate-fadeIn">
+              <div className="max-w-md rounded-3xl border border-white/[0.08] bg-white/[0.035] p-8 shadow-2xl">
+                <h2 className="text-xl font-semibold text-white">YouTube</h2>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                  Open YouTube to browse music and videos. Phoenix playback controls remain available while you explore.
+                </p>
+                <a
+                  href="https://www.youtube.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-6 inline-flex rounded-full bg-rose-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-rose-400"
+                >
+                  Open YouTube
+                </a>
+              </div>
+            </section>
+          )}
+
           {activeTab === 'images' && (
             <ImagesView
               collections={imageCollections}
@@ -1648,47 +1871,50 @@ export default function App() {
         )}
       </div>
 
-      <PlaybackBar
-        analyserNode={analyserRef.current}
-        currentTime={currentTime}
-        effectiveDuration={effectiveDuration}
-        isMuted={isMuted}
-        isPlaying={isPlaying}
-        isQueueOpen={showQueueDrawer}
-        isShuffle={isShuffle}
-        onNextTrack={handleNextTrack}
-        onOpenEqualizer={() => setShowEqualizerModal(true)}
-        onOpenShortcuts={() => setShowShortcutsModal(true)}
-        onPreviousTrack={handlePrevTrack}
-        onSeek={handleSeek}
-        onSetPlaybackSpeed={setPlaybackSpeed}
-        onSetVolume={(nextVolume) => {
-          setVolume(nextVolume);
-          if (isMuted) setIsMuted(false);
-        }}
-        onShowNowPlaying={() => {
-          setSelectedSidebar('home');
-          setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing');
-        }}
-        onShowVisualizer={() => {
-          setSelectedSidebar('visualizer');
-          setActiveTab('visualizer');
-        }}
-        onToggleFavorite={(trackId) => handleToggleFavorite(trackId)}
-        onToggleFullscreen={handleToggleFullscreen}
-        onToggleMute={toggleMute}
-        onTogglePlay={handleTogglePlay}
-        onToggleQueue={() => setShowQueueDrawer((open) => !open)}
-        onToggleRepeat={toggleRepeat}
-        onToggleShuffle={() => setIsShuffle((shuffle) => !shuffle)}
-        onStartScrubbing={() => { isDraggingScrubber.current = true; }}
-        onStopScrubbing={() => { isDraggingScrubber.current = false; }}
-        playbackSpeed={playbackSpeed}
-        progressPercent={progressPercent}
-        repeatMode={repeatMode}
-        track={currentTrack}
-        volume={volume}
-      />
+      {!(activeTab === 'now-playing' && selectedSidebar === 'home')
+        && !(activeTab === 'now-playing' && selectedSidebar === 'spotify') && (
+        <PlaybackBar
+          analyserNode={analyserRef.current}
+          currentTime={currentTime}
+          effectiveDuration={effectiveDuration}
+          isMuted={isMuted}
+          isPlaying={isPlaying}
+          isQueueOpen={showQueueDrawer}
+          isShuffle={isShuffle}
+          onNextTrack={handleNextTrack}
+          onOpenEqualizer={() => setShowEqualizerModal(true)}
+          onOpenShortcuts={() => setShowShortcutsModal(true)}
+          onPreviousTrack={handlePrevTrack}
+          onSeek={handleSeek}
+          onSetPlaybackSpeed={setPlaybackSpeed}
+          onSetVolume={(nextVolume) => {
+            setVolume(nextVolume);
+            if (isMuted) setIsMuted(false);
+          }}
+          onShowNowPlaying={() => {
+            setSelectedSidebar('home');
+            setActiveTab(currentTrack.mediaType === 'video' ? 'video-player' : 'now-playing');
+          }}
+          onShowVisualizer={() => {
+            setSelectedSidebar('visualizer');
+            setActiveTab('visualizer');
+          }}
+          onToggleFavorite={(trackId) => handleToggleFavorite(trackId)}
+          onToggleFullscreen={handleToggleFullscreen}
+          onToggleMute={toggleMute}
+          onTogglePlay={handleTogglePlay}
+          onToggleQueue={() => setShowQueueDrawer((open) => !open)}
+          onToggleRepeat={toggleRepeat}
+          onToggleShuffle={() => setIsShuffle((shuffle) => !shuffle)}
+          onStartScrubbing={() => { isDraggingScrubber.current = true; }}
+          onStopScrubbing={() => { isDraggingScrubber.current = false; }}
+          playbackSpeed={playbackSpeed}
+          progressPercent={progressPercent}
+          repeatMode={repeatMode}
+          track={currentTrack}
+          volume={volume}
+        />
+      )}
 
       {/* =========================================================
           MODALS: EQUALIZER DSP & KEYBOARD SHORTCUTS
