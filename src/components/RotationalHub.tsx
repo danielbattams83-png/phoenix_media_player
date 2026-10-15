@@ -157,9 +157,11 @@ export const RotationalHub: React.FC<RotationalHubProps> = ({
                 selectIndex(index);
                 onActivateMode?.(card.id);
               }}
-              className="absolute left-1/2 top-1/2 flex h-[260px] w-[min(76vw,300px)] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-4 rounded-3xl border border-white/10 bg-[#11141c]/95 p-6 text-center shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-colors hover:bg-[#191d29] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-300"
+              className="absolute flex h-[260px] w-[min(60vw,300px)] flex-col items-center justify-center gap-4 rounded-3xl border border-white/10 bg-[#11141c]/95 p-6 text-center shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-xl transition-colors hover:bg-[#191d29] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-300"
               style={{
-                transform: `translate(-50%, -50%) rotateY(${index * CARD_STEP_DEGREES}deg) translateZ(${CARD_RADIUS_PX}px)`,
+                left: 'calc(50% - min(30vw, 150px))',
+                top: 'calc(50% - 130px)',
+                transform: `rotateY(${index * CARD_STEP_DEGREES}deg) translateZ(${CARD_RADIUS_PX}px)`,
                 backfaceVisibility: 'hidden',
                 borderColor: activeIndex === index ? `${card.color}80` : undefined,
                 boxShadow: activeIndex === index ? `0 0 48px ${card.color}22, 0 24px 70px rgba(0,0,0,0.55)` : undefined
