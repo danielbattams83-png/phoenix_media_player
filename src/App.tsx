@@ -15,9 +15,8 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-import { Track, Playlist, Album, EqualizerPreset, PlayerView, ImageAsset, ImageCollection } from './types';
+import { Track, Playlist, EqualizerPreset, PlayerView, ImageAsset, ImageCollection } from './types';
 import { openLocalMediaFiles, openLocalMediaFolder, parseFileToTrack, formatBytes } from './utils/filePicker';
-import { generateSynthesizedTrackBlob } from './utils/audioSynth';
 import {
   deleteImage,
   loadImageCollections,
@@ -58,195 +57,8 @@ export function formatTime(seconds: number): string {
 }
 
 // ==========================================
-// INITIAL MOCK TRACKS WITH SYNTH FALLBACKS
+// PLAYER SETTINGS
 // ==========================================
-
-const INITIAL_TRACKS: Track[] = [
-  {
-    id: 'track-1',
-    title: 'STARDUST',
-    artist: 'Neon Electric',
-    album: 'Event Horizon',
-    duration: 30,
-    genre: 'Electronica / Synthwave',
-    year: 2025,
-    format: 'FLAC',
-    bitrate: '2840 kbps',
-    sampleRate: '96.0 kHz / 24-bit',
-    fileSize: '86.4 MB',
-    path: 'C:\\Lossless\\Event Horizon\\01 - Stardust.flac',
-    coverArt: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop',
-    accentColor: '#6366f1',
-    glowRgba: 'rgba(99, 102, 241, 0.45)',
-    isFavorite: true,
-    mediaType: 'audio',
-    synopsis: "From the studio album 'Event Horizon'. A masterful blend of analog synthesis and modern rhythmic pulses.",
-    lyrics: [
-      'Neon waves cascading through the silent grid',
-      'Reflections of a world we never hid',
-      'Catching frequencies in the midnight air',
-      'Zero gravity, leaving shadows there',
-      'Floating on the edge of sound and light',
-      'Infinite resonance through the night'
-    ]
-  },
-  {
-    id: 'track-2',
-    title: 'SOLARIS LUMINESCENCE',
-    artist: 'Kroma Soundworks',
-    album: 'Prismatic Echoes',
-    duration: 30,
-    genre: 'Electronic / Chill',
-    year: 2024,
-    format: 'FLAC',
-    bitrate: '2304 kbps',
-    sampleRate: '88.2 kHz / 24-bit',
-    fileSize: '62.1 MB',
-    path: 'C:\\Lossless\\Prismatic Echoes\\02 - Solaris Luminescence.flac',
-    coverArt: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=800&auto=format&fit=crop',
-    accentColor: '#ec4899',
-    glowRgba: 'rgba(236, 72, 153, 0.45)',
-    isFavorite: false,
-    mediaType: 'audio',
-    synopsis: 'Ethereal ambient pads layered with warm analog synth leads and spatial reverberation.',
-    lyrics: [
-      'Particles of sunlight breaking in',
-      'Where the timeless orbits first begin',
-      'Pulsing slowly in the solar wind',
-      'A golden journey with no end'
-    ]
-  },
-  {
-    id: 'track-3',
-    title: 'OBSIDIAN VELVET',
-    artist: 'Marcus Sterling Quartet',
-    album: 'Midnight Sessions at Blue Note',
-    duration: 30,
-    genre: 'Contemporary Jazz',
-    year: 2023,
-    format: 'WAV',
-    bitrate: '4608 kbps',
-    sampleRate: '192.0 kHz / 24-bit',
-    fileSize: '188.5 MB',
-    path: 'C:\\Lossless\\Blue Note Sessions\\03 - Obsidian Velvet.wav',
-    coverArt: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop',
-    accentColor: '#f59e0b',
-    glowRgba: 'rgba(245, 158, 11, 0.45)',
-    isFavorite: true,
-    mediaType: 'audio',
-    synopsis: 'Live acoustic jazz captured in uncompressed 192kHz multi-track master quality.',
-    lyrics: [
-      '[Instrumental Solo - Double Bass & Muted Trumpet]',
-      '[Tenor Saxophone Cadenza]',
-      '[Brushed Snare & Rhodes Improvisation]'
-    ]
-  },
-  {
-    id: 'track-4',
-    title: 'CASCADIA RAIN',
-    artist: 'Elena Rostova',
-    album: 'Modern Classical Elements',
-    duration: 30,
-    genre: 'Neoclassical / Piano',
-    year: 2025,
-    format: 'FLAC',
-    bitrate: '1820 kbps',
-    sampleRate: '48.0 kHz / 24-bit',
-    fileSize: '41.8 MB',
-    path: 'C:\\Neoclassical\\04 - Cascadia Rain.flac',
-    coverArt: 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?q=80&w=800&auto=format&fit=crop',
-    accentColor: '#06b6d4',
-    glowRgba: 'rgba(6, 182, 212, 0.45)',
-    isFavorite: false,
-    mediaType: 'audio',
-    synopsis: 'Intimate felt piano with binaural room mics recording gentle rainfall.',
-    lyrics: [
-      'Drops tapping against acoustic wood',
-      'Quiet memories understood',
-      'Sustain pedal holding on to grace',
-      'Time stands still in this gentle space'
-    ]
-  },
-  {
-    id: 'track-5',
-    title: 'CYBERPUNK DRIVE',
-    artist: 'Vektor 99 & Glitch Matrix',
-    album: 'Neo Tokyo Expressway',
-    duration: 30,
-    genre: 'Darksynth / Cyberpunk',
-    year: 2026,
-    format: 'MP3',
-    bitrate: '320 kbps',
-    sampleRate: '44.1 kHz / 16-bit',
-    fileSize: '11.3 MB',
-    path: 'C:\\Synthwave\\Neo Tokyo\\05 - Cyberpunk Drive.mp3',
-    coverArt: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=800&auto=format&fit=crop',
-    accentColor: '#10b981',
-    glowRgba: 'rgba(16, 185, 129, 0.45)',
-    isFavorite: true,
-    mediaType: 'audio',
-    synopsis: 'High-octane synth basslines with distorted drum machines and neon-drenched melodies.',
-    lyrics: [
-      'Turbos spooling in the rain-slick street',
-      'Holographic adverts at our feet',
-      'Pushing past the limiter tonight',
-      'High-speed chase in crimson light'
-    ]
-  },
-  {
-    id: 'track-6',
-    title: 'DEEP ABYSS RESONANCE',
-    artist: 'Nautilus Deep Sea Project',
-    album: 'Oceanic Frequencies',
-    duration: 30,
-    genre: 'Deep Ambient / Drone',
-    year: 2024,
-    format: 'FLAC',
-    bitrate: '2110 kbps',
-    sampleRate: '96.0 kHz / 24-bit',
-    fileSize: '79.2 MB',
-    path: 'C:\\Lossless\\Oceanic Frequencies\\06 - Deep Abyss.flac',
-    coverArt: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=800&auto=format&fit=crop',
-    accentColor: '#8b5cf6',
-    glowRgba: 'rgba(139, 92, 246, 0.45)',
-    isFavorite: false,
-    mediaType: 'audio',
-    synopsis: 'Ultra-low frequency acoustic drones modeled from ocean depths.',
-    lyrics: [
-      'Sub-bass waves 4000 meters low',
-      'Bioluminescent blue-green glow',
-      'Pressure rising, silence everywhere',
-      'Submerging deep beyond all care'
-    ]
-  }
-];
-
-const MOCK_ALBUMS: Album[] = [
-  {
-    id: 'alb-1',
-    title: 'Event Horizon',
-    artist: 'Neon Electric',
-    year: 2025,
-    trackCount: 10,
-    coverArt: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&auto=format&fit=crop'
-  },
-  {
-    id: 'alb-2',
-    title: 'Prismatic Echoes',
-    artist: 'Kroma Soundworks',
-    year: 2024,
-    trackCount: 8,
-    coverArt: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=600&auto=format&fit=crop'
-  },
-  {
-    id: 'alb-3',
-    title: 'Midnight Sessions at Blue Note',
-    artist: 'Marcus Sterling Quartet',
-    year: 2023,
-    trackCount: 6,
-    coverArt: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=600&auto=format&fit=crop'
-  }
-];
 
 const EQUALIZER_PRESETS: EqualizerPreset[] = [
   { name: 'Flat', bands: [0, 0, 0, 0, 0] },
@@ -256,6 +68,26 @@ const EQUALIZER_PRESETS: EqualizerPreset[] = [
   { name: 'Vocal / Clarity', bands: [-2, 1, 4, 3, 1] },
   { name: 'Spatial Immersive', bands: [3, 2, -1, 3, 4] }
 ];
+
+const EMPTY_TRACK: Track = {
+  id: '',
+  title: 'No track selected',
+  artist: '',
+  album: '',
+  duration: 0,
+  genre: '',
+  year: 0,
+  format: 'MP3',
+  bitrate: '',
+  sampleRate: '',
+  fileSize: '',
+  path: '',
+  coverArt: '',
+  accentColor: '#6366f1',
+  glowRgba: 'rgba(99, 102, 241, 0.45)',
+  isFavorite: false,
+  mediaType: 'audio'
+};
 
 export default function App() {
   // Navigation & View State
@@ -280,7 +112,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Playback Engine State
-  const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
+  const [tracks, setTracks] = useState<Track[]>([]);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [playlistQueueIds, setPlaylistQueueIds] = useState<string[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -290,7 +122,7 @@ export default function App() {
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(30);
+  const [duration, setDuration] = useState<number>(0);
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [volume, setVolume] = useState<number>(75);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -314,7 +146,29 @@ export default function App() {
   const biquadFiltersRef = useRef<BiquadFilterNode[]>([]);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
 
-  const currentTrack = tracks[currentTrackIndex] || tracks[0];
+  const currentTrack = tracks[currentTrackIndex] ?? tracks[0] ?? EMPTY_TRACK;
+
+  const albums = useMemo(() => {
+    const albumsByKey = new Map<string, { title: string; artist: string; year: number; coverArt: string; trackIds: string[] }>();
+    tracks.forEach((track) => {
+      const title = track.album.trim() || 'Unknown Album';
+      const artist = track.artist.trim() || 'Unknown Artist';
+      const key = `${artist.toLocaleLowerCase()}\0${title.toLocaleLowerCase()}`;
+      const album = albumsByKey.get(key);
+      if (album) {
+        album.trackIds.push(track.id);
+      } else {
+        albumsByKey.set(key, {
+          title,
+          artist,
+          year: track.year,
+          coverArt: track.coverArt,
+          trackIds: [track.id]
+        });
+      }
+    });
+    return Array.from(albumsByKey.entries()).map(([id, album]) => ({ id, ...album }));
+  }, [tracks]);
 
   useEffect(() => {
     if (activeTab === 'youtube') {
@@ -469,45 +323,6 @@ export default function App() {
       showToast('Fullscreen is not available in this window.');
     }
   };
-
-  // ==========================================
-  // INITIALIZE SYNTHETIC AUDIO FOR DEFAULT TRACKS
-  // ==========================================
-  useEffect(() => {
-    let isMounted = true;
-    const loadDefaultSynthSounds = async () => {
-      const styles: Array<'synthwave' | 'ambient' | 'jazz' | 'piano' | 'cyberpunk' | 'drone'> = [
-        'synthwave',
-        'ambient',
-        'jazz',
-        'piano',
-        'cyberpunk',
-        'drone'
-      ];
-      try {
-        const updated = await Promise.all(
-          INITIAL_TRACKS.map(async (trk, idx) => {
-            const blobUrl = await generateSynthesizedTrackBlob(styles[idx % styles.length], 45);
-            return {
-              ...trk,
-              mediaUrl: blobUrl,
-              duration: 45
-            };
-          })
-        );
-        if (isMounted) {
-          const synthesizedById = new Map(updated.map((track) => [track.id, track]));
-          setTracks((current) => current.map((track) => synthesizedById.get(track.id) ?? track));
-        }
-      } catch (err) {
-        console.warn('Synth sound generator notice:', err);
-      }
-    };
-    loadDefaultSynthSounds();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   // ==========================================
   // INITIALIZE WEB AUDIO GRAPH (DSP & VISUALIZER)
@@ -675,6 +490,7 @@ export default function App() {
   }, [currentTrack.mediaType]);
 
   const handlePlayTrack = useCallback((index: number) => {
+    if (!tracks[index]) return;
     setActivePlaylistId(null);
     setPlaylistQueueIds([]);
     setCurrentTrackIndex(index);
@@ -699,6 +515,7 @@ export default function App() {
   };
 
   const handleNextTrack = useCallback(() => {
+    if (tracks.length === 0) return;
     if (activePlaylistId && playlistQueueIds.length) {
       const currentId = tracks[currentTrackIndex]?.id;
       const currentQueueIndex = playlistQueueIds.indexOf(currentId);
@@ -719,6 +536,7 @@ export default function App() {
   }, [activePlaylistId, currentTrackIndex, isShuffle, playlistQueueIds, tracks]);
 
   const handlePrevTrack = useCallback(() => {
+    if (tracks.length === 0) return;
     const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
     if (el && el.currentTime > 3) {
       el.currentTime = 0;
@@ -1352,7 +1170,7 @@ export default function App() {
           )}
 
           {/* TAB 1: NOW PLAYING (IMMERSIVE SHOWCASE HERO) */}
-          {activeTab === 'now-playing' && selectedSidebar === 'home' && currentTrack.mediaType !== 'video' && (
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && tracks.length > 0 && currentTrack.mediaType !== 'video' && (
             <div className="relative z-10 flex w-full flex-col px-6 py-6 animate-fadeIn lg:px-12 xl:px-16">
               <section className="flex flex-col items-center justify-center gap-8 lg:flex-row xl:gap-14">
                 {/* Left: Album Artwork with Glow & Playback badge */}
@@ -1502,6 +1320,24 @@ export default function App() {
                 </div>
               )}
             </div>
+          )}
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && tracks.length === 0 && (
+            <section className="relative z-10 mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-indigo-300">
+                <Folder className="h-6 w-6" />
+              </div>
+              <h1 className="text-xl font-semibold text-white">Your library is empty</h1>
+              <p className="max-w-sm text-sm text-zinc-400">
+                Add music or video files to start building your library and play your first track.
+              </p>
+              <button
+                type="button"
+                onClick={handleLoadLocalFiles}
+                className="mt-2 rounded-full bg-indigo-400 px-5 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-indigo-300"
+              >
+                Add music
+              </button>
+            </section>
           )}
 
           {/* VIDEO PLAYER VIEW */}
@@ -1704,10 +1540,13 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                {MOCK_ALBUMS.map((alb) => (
+                {albums.map((alb) => (
                   <div
                     key={alb.id}
-                    onClick={() => setActiveTab('now-playing')}
+                    onClick={() => {
+                      const firstTrackIndex = tracks.findIndex((track) => track.id === alb.trackIds[0]);
+                      if (firstTrackIndex >= 0) handlePlayTrack(firstTrackIndex);
+                    }}
                     className="p-4 rounded-2xl bg-zinc-900/40 border border-white/5 hover:border-indigo-500/40 transition-all cursor-pointer group flex flex-col gap-3"
                   >
                     <div className="aspect-square w-full rounded-xl overflow-hidden bg-zinc-800 relative">
@@ -1727,12 +1566,17 @@ export default function App() {
                       <h3 className="font-bold text-sm text-zinc-100 truncate">{alb.title}</h3>
                       <p className="text-xs text-zinc-400">{alb.artist}</p>
                       <p className="text-[10px] font-mono text-zinc-500 mt-1">
-                        {alb.year} • {alb.trackCount} Tracks
+                        {alb.year || 'Year unknown'} • {alb.trackIds.length} Tracks
                       </p>
                     </div>
                   </div>
                 ))}
               </div>
+              {albums.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-zinc-500">
+                  No albums yet. Import music to see your albums here.
+                </div>
+              )}
             </div>
           )}
 
@@ -1856,7 +1700,8 @@ export default function App() {
         )}
       </div>
 
-      {!(activeTab === 'now-playing' && selectedSidebar === 'home')
+      {tracks.length > 0
+        && !(activeTab === 'now-playing' && selectedSidebar === 'home')
         && !(activeTab === 'now-playing' && selectedSidebar === 'spotify') && (
         renderPlaybackBar()
       )}
