@@ -184,7 +184,7 @@ export const InteractivePhoenixHero: React.FC<InteractivePhoenixHeroProps> = ({
             gradientUnits="userSpaceOnUse"
             cx={VIEWBOX_SIZE / 2}
             cy={VIEWBOX_SIZE / 2}
-            r={VIEWBOX_SIZE * 0.1}
+            r={VIEWBOX_SIZE * 0.05}
           >
             <stop offset="0" stopColor="white" stopOpacity="1" />
             <stop offset="0.72" stopColor="white" stopOpacity="1" />
