@@ -1140,32 +1140,6 @@ export default function App() {
                     </p>
                   </div>
                 </div>
-                <RotationalHub
-                  initialDestination={activePlayerMode}
-                  onSelectMode={(destination) => {
-                    setActivePlayerMode(destination);
-                  }}
-                  onActivateMode={(destination) => {
-                    switch (destination) {
-                      case 'local-files':
-                        setSelectedSidebar('tracks');
-                        setActiveTab('file-browser');
-                        break;
-                      case 'spotify':
-                        setSelectedSidebar('spotify');
-                        setActiveTab('now-playing');
-                        break;
-                      case 'youtube':
-                        setSelectedSidebar('youtube');
-                        setActiveTab('youtube');
-                        break;
-                      case 'equalizer':
-                        setSelectedSidebar('home');
-                        setShowEqualizerModal(true);
-                        break;
-                    }
-                  }}
-                />
               </div>
             </>
           )}
@@ -1173,6 +1147,28 @@ export default function App() {
           {/* TAB 1: NOW PLAYING (IMMERSIVE SHOWCASE HERO) */}
           {activeTab === 'now-playing' && selectedSidebar === 'home' && tracks.length > 0 && currentTrack.mediaType !== 'video' && (
             <div className="relative z-10 flex w-full flex-col px-6 py-6 animate-fadeIn lg:px-12 xl:px-16">
+              <div className="mb-4 flex items-center justify-center gap-2">
+                <button
+                  id="btn-hero-favorite"
+                  onClick={(e) => handleToggleFavorite(currentTrack.id, e)}
+                  className="p-3 rounded-full bg-white/[0.055] hover:bg-white/10 text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer"
+                  title={currentTrack.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  aria-label={currentTrack.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <svg width="18" height="18" fill={currentTrack.isFavorite ? '#f43f5e' : 'none'} stroke={currentTrack.isFavorite ? '#f43f5e' : 'currentColor'} strokeWidth="2">
+                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+                  </svg>
+                </button>
+                <button
+                  id="btn-hero-equalizer"
+                  onClick={() => setShowEqualizerModal(true)}
+                  className="p-3 rounded-full bg-white/[0.055] hover:bg-white/10 text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer"
+                  title="Equalizer DSP"
+                  aria-label="Equalizer DSP"
+                >
+                  <Sliders className="w-[18px] h-[18px] text-indigo-400" />
+                </button>
+              </div>
               <section className="flex flex-col items-center justify-center gap-8 lg:flex-row xl:gap-14">
                 {/* Left: Album Artwork with Glow & Playback badge */}
                 <div className="relative group flex-shrink-0">
@@ -1264,29 +1260,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      id="btn-hero-favorite"
-                      onClick={(e) => handleToggleFavorite(currentTrack.id, e)}
-                      className="p-3 rounded-full bg-white/[0.055] hover:bg-white/10 text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer"
-                      title={currentTrack.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                      aria-label={currentTrack.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                    >
-                      <svg width="18" height="18" fill={currentTrack.isFavorite ? '#f43f5e' : 'none'} stroke={currentTrack.isFavorite ? '#f43f5e' : 'currentColor'} strokeWidth="2">
-                        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-                      </svg>
-                    </button>
-                    <button
-                      id="btn-hero-equalizer"
-                      onClick={() => setShowEqualizerModal(true)}
-                      className="p-3 rounded-full bg-white/[0.055] hover:bg-white/10 text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer"
-                      title="Equalizer DSP"
-                      aria-label="Equalizer DSP"
-                    >
-                      <Sliders className="w-[18px] h-[18px] text-indigo-400" />
-                    </button>
-                  </div>
                 </div>
               </section>
 
@@ -1339,6 +1312,36 @@ export default function App() {
                 Add music
               </button>
             </section>
+          )}
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && (
+            <div className="relative z-10 flex shrink-0 flex-col items-center px-4">
+              <RotationalHub
+                initialDestination={activePlayerMode}
+                onSelectMode={(destination) => {
+                  setActivePlayerMode(destination);
+                }}
+                onActivateMode={(destination) => {
+                  switch (destination) {
+                    case 'local-files':
+                      setSelectedSidebar('tracks');
+                      setActiveTab('file-browser');
+                      break;
+                    case 'spotify':
+                      setSelectedSidebar('spotify');
+                      setActiveTab('now-playing');
+                      break;
+                    case 'youtube':
+                      setSelectedSidebar('youtube');
+                      setActiveTab('youtube');
+                      break;
+                    case 'equalizer':
+                      setSelectedSidebar('home');
+                      setShowEqualizerModal(true);
+                      break;
+                  }
+                }}
+              />
+            </div>
           )}
 
           {/* VIDEO PLAYER VIEW */}
