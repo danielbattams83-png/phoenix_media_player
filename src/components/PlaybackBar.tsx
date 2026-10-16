@@ -23,6 +23,7 @@ import { MiniVisualizer } from './MiniVisualizer';
 interface PlaybackBarProps {
   analyserNode: AnalyserNode | null;
   embedded?: boolean;
+  pullout?: boolean;
   currentTime: number;
   effectiveDuration: number;
   isMuted: boolean;
@@ -65,6 +66,7 @@ function formatTime(seconds: number): string {
 export const PlaybackBar: React.FC<PlaybackBarProps> = ({
   analyserNode,
   embedded = false,
+  pullout = false,
   currentTime,
   effectiveDuration,
   isMuted,
@@ -99,15 +101,22 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
   <footer
     id="bottom-playback-bar"
     aria-label="Playback controls"
-    className={embedded
+    className={pullout
+      ? 'relative z-30 flex h-[min(70vh,560px)] w-[min(340px,calc(100vw-3rem))] shrink-0 flex-col justify-between gap-5 overflow-y-auto rounded-r-2xl border border-l-0 border-white/[0.12] bg-[#0b0d12]/95 p-4 shadow-[12px_0_36px_rgba(0,0,0,0.35)] backdrop-blur-2xl select-none'
+      : embedded
       ? 'relative z-20 mx-auto my-6 grid w-full max-w-3xl shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 rounded-2xl border border-white/[0.12] bg-white/[0.075] p-4 shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none'
       : 'relative z-30 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 border-t border-white/[0.08] bg-[#0b0d12]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none md:flex md:h-24 md:justify-between md:gap-4 md:px-6 md:py-0 xl:px-8'}
   >
-    <div className="pointer-events-none absolute -top-px left-0 right-0 h-px bg-white/[0.06]" />
+    <div className={pullout
+      ? 'pointer-events-none absolute left-0 right-0 top-0 h-px bg-white/[0.06]'
+      : 'pointer-events-none absolute -top-px left-0 right-0 h-px bg-white/[0.06]'}
+    />
 
     <div className={embedded
       ? 'col-start-1 row-start-1 flex min-w-0 items-center gap-2.5'
-      : 'col-start-1 row-start-1 flex min-w-0 items-center gap-2.5 md:w-[28%]'}
+      : pullout
+        ? 'flex min-w-0 flex-col items-center gap-2.5 text-center'
+        : 'col-start-1 row-start-1 flex min-w-0 items-center gap-2.5 md:w-[28%]'}
     >
       <button
         className="relative shrink-0 overflow-hidden rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
@@ -156,7 +165,9 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
 
     <div className={embedded
       ? 'col-span-2 row-start-2 flex min-w-0 flex-col items-center gap-1'
-      : 'col-span-2 row-start-2 flex min-w-0 flex-col items-center gap-1 md:w-[44%] md:min-w-[250px] md:max-w-xl'}
+      : pullout
+        ? 'flex min-w-0 flex-col items-center gap-3'
+        : 'col-span-2 row-start-2 flex min-w-0 flex-col items-center gap-1 md:w-[44%] md:min-w-[250px] md:max-w-xl'}
     >
       <div className="flex items-center gap-2 md:gap-4">
         <button
@@ -236,7 +247,9 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
 
     <div className={embedded
       ? 'col-start-2 row-start-1 flex items-center justify-end gap-1 md:gap-2'
-      : 'col-start-2 row-start-1 flex items-center justify-end gap-1 md:w-[28%] md:gap-2'}
+      : pullout
+        ? 'flex flex-wrap items-center justify-center gap-1.5 border-t border-white/[0.08] pt-3'
+        : 'col-start-2 row-start-1 flex items-center justify-end gap-1 md:w-[28%] md:gap-2'}
     >
       <select
         value={playbackSpeed}

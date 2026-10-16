@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Play,
+  ChevronLeft,
   Heart,
   ListMusic,
   Folder,
@@ -102,6 +103,7 @@ export default function App() {
     return params.has('code') || params.has('error') ? 'spotify' : 'local-files';
   });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
+  const [isPlaybackPulloutOpen, setIsPlaybackPulloutOpen] = useState<boolean>(false);
   const [showQueueDrawer, setShowQueueDrawer] = useState<boolean>(false);
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false);
   const [showEqualizerModal, setShowEqualizerModal] = useState<boolean>(false);
@@ -926,10 +928,11 @@ export default function App() {
 
   const effectiveDuration = duration > 0 ? duration : currentTrack.duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
-  const renderPlaybackBar = (embedded = false) => (
+  const renderPlaybackBar = (embedded = false, pullout = false) => (
     <PlaybackBar
       analyserNode={analyserRef.current}
       embedded={embedded}
+      pullout={pullout}
       currentTime={currentTime}
       effectiveDuration={effectiveDuration}
       isMuted={isMuted}
@@ -1263,8 +1266,6 @@ export default function App() {
                 </div>
               </section>
 
-              {renderPlaybackBar(true)}
-
               {/* Synced Lyrics Drawer (Collapsible) */}
               {showLyricsPanel && currentTrack.lyrics && (
                 <div className="p-6 rounded-2xl bg-zinc-900/60 border border-white/5 backdrop-blur-md transition-all my-4 max-w-2xl mx-auto w-full">
@@ -1360,12 +1361,6 @@ export default function App() {
               onToggleMute={toggleMute}
             />
           )}
-          {activeTab === 'now-playing' && selectedSidebar === 'home' && currentTrack.mediaType === 'video' && (
-            <div className="relative z-10 shrink-0 px-6 pb-6 lg:px-12 xl:px-16">
-              {renderPlaybackBar(true)}
-            </div>
-          )}
-
           {/* TAB 2: FILE BROWSER (IMMERSIVE EXPLORER) */}
           {activeTab === 'file-browser' && (
             <div className="flex flex-1 flex-col space-y-4 overflow-y-auto p-4 animate-fadeIn sm:space-y-5 sm:p-6 lg:p-8">
@@ -1704,10 +1699,25 @@ export default function App() {
         )}
       </div>
 
-      {tracks.length > 0
-        && !(activeTab === 'now-playing' && selectedSidebar === 'home')
-        && !(activeTab === 'now-playing' && selectedSidebar === 'spotify') && (
-        renderPlaybackBar()
+      {tracks.length > 0 && (
+        <aside
+          className="fixed left-0 top-1/2 z-40 flex -translate-y-1/2 items-center md:left-60 xl:left-64"
+          aria-label="Pullout playback controls"
+        >
+          <button
+            type="button"
+            onClick={() => setIsPlaybackPulloutOpen((open) => !open)}
+            className={`flex h-[min(42vh,360px)] w-8 shrink-0 items-center justify-center border border-l-0 border-white/[0.12] bg-[#11141c]/95 text-zinc-300 shadow-lg backdrop-blur-xl transition-colors hover:bg-indigo-400/20 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
+              isPlaybackPulloutOpen ? 'rounded-l-xl border-r-0' : 'rounded-r-xl'
+            }`}
+            aria-label={isPlaybackPulloutOpen ? 'Close playback controls' : 'Open playback controls'}
+            aria-expanded={isPlaybackPulloutOpen}
+            title={isPlaybackPulloutOpen ? 'Close playback controls' : 'Open playback controls'}
+          >
+            {isPlaybackPulloutOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+          {isPlaybackPulloutOpen && renderPlaybackBar(false, true)}
+        </aside>
       )}
 
       {/* =========================================================
