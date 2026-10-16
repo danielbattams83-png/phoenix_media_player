@@ -65,8 +65,8 @@ export const InteractivePhoenixHero: React.FC<InteractivePhoenixHeroProps> = ({
 
       const intensity = Math.max(0, Math.min(1, motion.intensity));
       const audioPulse = Math.min(1, audio);
-      const distortionScale = intensity * 44 + audioPulse * 20;
-      const baseFrequency = 0.009 + intensity * 0.026 + audioPulse * 0.01;
+      const distortionScale = intensity * 16 + audioPulse * 2;
+      const baseFrequency = 0.04 + intensity * 0.012 + audioPulse * 0.006;
       const mouseOffsetX = (motion.x - 0.5) * 2;
       const mouseOffsetY = (motion.y - 0.5) * 2;
       const hueShift = (mouseOffsetX * 58 + mouseOffsetY * 82) * intensity;
@@ -141,14 +141,14 @@ export const InteractivePhoenixHero: React.FC<InteractivePhoenixHeroProps> = ({
     <span
       ref={containerRef}
       className={`interactive-phoenix-hero inline-flex shrink-0 items-center justify-center ${className}`}
-      style={{ width: size, height: size }}
+      style={{ width: `min(${size}px, 72vw)`, height: `min(${size}px, 72vw)` }}
       role="img"
       aria-label="Interactive Phoenix logo"
     >
       <svg
         className="interactive-phoenix-hero__art"
-        width={size}
-        height={size}
+        width="100%"
+        height="100%"
         viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
         aria-hidden="true"
       >
@@ -164,7 +164,7 @@ export const InteractivePhoenixHero: React.FC<InteractivePhoenixHeroProps> = ({
             <feTurbulence
               ref={turbulenceRef}
               type="fractalNoise"
-              baseFrequency="0.009"
+              baseFrequency="0.04"
               numOctaves="2"
               seed="4"
               result="liquidNoise"
@@ -184,10 +184,11 @@ export const InteractivePhoenixHero: React.FC<InteractivePhoenixHeroProps> = ({
             gradientUnits="userSpaceOnUse"
             cx={VIEWBOX_SIZE / 2}
             cy={VIEWBOX_SIZE / 2}
-            r={VIEWBOX_SIZE * 0.36}
+            r={VIEWBOX_SIZE * 0.1}
           >
             <stop offset="0" stopColor="white" stopOpacity="1" />
-            <stop offset="0.55" stopColor="white" stopOpacity="0.85" />
+            <stop offset="0.72" stopColor="white" stopOpacity="1" />
+            <stop offset="0.92" stopColor="white" stopOpacity="0.35" />
             <stop offset="1" stopColor="white" stopOpacity="0" />
           </radialGradient>
           <mask id={maskId}>

@@ -1130,7 +1130,7 @@ export default function App() {
             <>
               <div className="relative z-10 flex shrink-0 flex-col items-center px-4">
                 <div className="flex flex-col items-center text-center">
-                  <InteractivePhoenixHero audioLevel={audioLevel} size={280} />
+                  <InteractivePhoenixHero audioLevel={audioLevel} size={560} />
                   <div className="mt-2">
                     <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-200/90">
                       Phoenix Player
