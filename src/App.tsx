@@ -44,6 +44,8 @@ import { ImagesView } from './components/ImagesView';
 import { SpotifyView } from './components/SpotifyView';
 import { MagneticLogo } from './components/MagneticLogo';
 import { ListeningHome } from './components/ListeningHome';
+import { QueuePanel } from './components/QueuePanel';
+import { useMediaSession } from './components/useMediaSession';
 import { ContinueListening } from './components/ContinueListening';
 import { collectDroppedFiles, fileIdentity, isMediaFile } from './utils/mediaImport';
 import { loadListeningHistory, saveListeningEntry, type ListeningEntry } from './utils/persistence';
@@ -106,6 +108,9 @@ export default function App() {
   });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [showQueueDrawer, setShowQueueDrawer] = useState<boolean>(false);
+  const [upNext, setUpNext] = useState<string[]>([]);
+  const [sleepDeadline, setSleepDeadline] = useState<number | null>(null);
+  const [sleepRemaining, setSleepRemaining] = useState(0);
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false);
   const [showEqualizerModal, setShowEqualizerModal] = useState<boolean>(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
@@ -532,6 +537,16 @@ export default function App() {
 
   const handleNextTrack = useCallback(() => {
     if (tracks.length === 0) return;
+    const queuedId = upNext.find(id => tracks.some(track => track.id === id));
+    if (queuedId) {
+      setUpNext(previous => previous.slice(previous.indexOf(queuedId) + 1));
+      const index = tracks.findIndex(track => track.id === queuedId);
+      const el = tracks[index].mediaType === 'video' ? videoRef.current : audioRef.current;
+      if (index === currentTrackIndex && el) { el.currentTime = 0; void el.play().catch(() => setIsPlaying(false)); }
+      setCurrentTrackIndex(index); setCurrentTime(0); setIsPlaying(true);
+      if (tracks[index].mediaType === 'video') setActiveTab('video-player');
+      return;
+    }
     if (activePlaylistId && playlistQueueIds.length) {
       const currentId = tracks[currentTrackIndex]?.id;
       const currentQueueIndex = playlistQueueIds.indexOf(currentId);
@@ -549,7 +564,7 @@ export default function App() {
     }
     setCurrentTime(0);
     setIsPlaying(true);
-  }, [activePlaylistId, currentTrackIndex, isShuffle, playlistQueueIds, tracks]);
+  }, [activePlaylistId, currentTrackIndex, isShuffle, playlistQueueIds, tracks, upNext]);
 
   const handlePrevTrack = useCallback(() => {
     if (tracks.length === 0) return;
@@ -953,7 +968,7 @@ export default function App() {
           showToast('Playback could not continue. Check that the media file is still available.');
         });
       }
-    } else if (repeatMode === 'all') {
+    } else if (repeatMode === 'all' || upNext.length > 0) {
       handleNextTrack();
     } else {
       const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
@@ -991,6 +1006,22 @@ export default function App() {
 
   const effectiveDuration = duration > 0 ? duration : currentTrack.duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
+  useMediaSession(currentTrack, isPlaying, currentTime, effectiveDuration, playbackSpeed, {
+    play: () => setIsPlaying(true), pause: () => setIsPlaying(false), next: handleNextTrack, previous: handlePrevTrack, stop: handleStop,
+    seek: position => { const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current; if (el) { el.currentTime = Math.min(effectiveDuration, Math.max(0, position)); setCurrentTime(el.currentTime); } },
+  });
+  useEffect(() => {
+    if (!sleepDeadline) return;
+    const restoreVolume = () => { [audioRef.current, videoRef.current].forEach(el => { if (el) el.volume = isMuted ? 0 : volume / 100; }); };
+    const tick = () => {
+      const remaining = Math.max(0, sleepDeadline - Date.now());
+      setSleepRemaining(Math.ceil(remaining / 1000));
+      [audioRef.current, videoRef.current].forEach(el => { if (el) el.volume = (isMuted ? 0 : volume / 100) * Math.min(1, remaining / 10000); });
+      if (!remaining) { audioRef.current?.pause(); videoRef.current?.pause(); setIsPlaying(false); setSleepDeadline(null); showToast('Sleep timer finished. Playback paused.'); }
+    };
+    tick(); const interval = window.setInterval(tick, 250);
+    return () => { clearInterval(interval); restoreVolume(); };
+  }, [sleepDeadline, volume, isMuted, showToast]);
   const renderPlaybackBar = (embedded = false, pullout = false) => (
     <PlaybackBar
       analyserNode={analyserRef.current}
@@ -1675,60 +1706,15 @@ export default function App() {
         {/* ==========================================
             RIGHT QUEUE DRAWER (SLIDE OVER)
             ========================================== */}
-        {showQueueDrawer && (
-          <aside className="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-[#11141c]/95 backdrop-blur-2xl border-l border-white/[0.08] p-6 flex flex-col gap-4 z-20 shadow-2xl animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <div className="flex items-center gap-2">
-                <ListMusic className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
-                  Playback Queue ({tracks.length})
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowQueueDrawer(false)}
-                className="text-zinc-500 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2">
-              {tracks.map((t, idx) => {
-                const isCur = idx === currentTrackIndex;
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => handlePlayTrack(idx)}
-                    className={`p-2.5 rounded-xl flex items-center gap-3 cursor-pointer transition-all ${
-                      isCur
-                        ? 'bg-indigo-500/20 border border-indigo-500/40 text-white'
-                        : 'hover:bg-white/5 text-zinc-400'
-                    }`}
-                  >
-                    <img
-                      src={t.coverArt}
-                      alt={t.title}
-                      referrerPolicy="no-referrer"
-                      className="w-9 h-9 rounded-lg object-cover border border-white/10"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-semibold truncate ${isCur ? 'text-indigo-400' : 'text-zinc-200'}`}>
-                        {t.title}
-                      </p>
-                      <p className="text-[10px] text-zinc-500 truncate">{t.artist}</p>
-                    </div>
-                    <span className="text-[10px] font-mono text-zinc-500">
-                      {formatTime(t.duration)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-          </aside>
-        )}
+        {showQueueDrawer && <QueuePanel tracks={tracks} queue={upNext.filter(id => tracks.some(track => track.id === id))} onChange={setUpNext} onClose={() => setShowQueueDrawer(false)} />}
       </div>
 
+      {tracks.length > 0 && <div className="flex shrink-0 items-center justify-between border-t border-white/10 bg-zinc-950 px-4 text-xs">
+        <button className="min-h-11 text-amber-200" onClick={() => setShowQueueDrawer(open => !open)} aria-expanded={showQueueDrawer}>Up next ({upNext.length})</button>
+        <label className="flex items-center gap-2 text-zinc-400">{sleepDeadline ? `Sleep · ${formatTime(sleepRemaining)}` : 'Sleep timer'}<select aria-label="Sleep timer" value={sleepDeadline ? 'active' : 'off'} onChange={event => { const minutes = Number(event.target.value); setSleepRemaining(minutes * 60); setSleepDeadline(minutes ? Date.now() + minutes * 60000 : null); }} className="min-h-11 max-w-32 bg-zinc-950 px-2 text-zinc-200">
+          <option value="off">Off</option>{sleepDeadline && <option value="active" disabled>Timer active</option>}{[1, 15, 30, 45, 60].map(minutes => <option key={minutes} value={minutes}>{minutes} min</option>)}
+        </select></label>
+      </div>}
       {tracks.length > 0 && renderPlaybackBar()}
 
       {/* =========================================================
