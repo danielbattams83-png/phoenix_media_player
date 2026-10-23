@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Heart,
   Keyboard,
@@ -97,7 +97,29 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
   repeatMode,
   track,
   volume
-}) => (
+}) => {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const time = `${formatTime(currentTime)} / ${formatTime(effectiveDuration)}`;
+  return <>
+    {!embedded && !pullout && <div className="flex shrink-0 items-center gap-3 border-t border-white/10 bg-zinc-900 px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:hidden">
+      <button onClick={() => { setExpanded(true); dialog.current?.showModal(); }} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label="Expand Now Playing">
+        <img src={track.coverArt} alt="" className="h-11 w-11 rounded-lg object-cover" /><span className="min-w-0"><span className="block truncate text-sm font-semibold">{track.title}</span><span className="block truncate text-xs text-zinc-400">{track.artist} · {time}</span></span>
+      </button>
+      <button onClick={onTogglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-200 text-zinc-950">{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}</button>
+      <button onClick={onNextTrack} aria-label="Next track" className="p-3"><SkipForward className="h-5 w-5" /></button>
+    </div>}
+    <dialog ref={dialog} onClose={() => setExpanded(false)} aria-labelledby="mobile-now-playing" className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-y-auto bg-zinc-950 p-6 text-white backdrop:bg-black/70">
+      {expanded && <div className="mx-auto flex min-h-full max-w-md flex-col gap-4 pb-[env(safe-area-inset-bottom)]">
+        <div className="flex items-center justify-between"><h2 id="mobile-now-playing" className="text-xs font-medium uppercase tracking-widest text-amber-200">Now Playing</h2><button onClick={() => dialog.current?.close()} className="min-h-11 px-3 text-sm" autoFocus>Close</button></div>
+        <img src={track.coverArt} alt="" className="mx-auto aspect-square w-[min(45vw,24dvh)] max-w-64 rounded-2xl object-cover shadow-2xl" />
+        <div><h3 className="break-words text-2xl font-semibold">{track.title}</h3><p className="mt-1 text-zinc-400">{track.artist}</p></div>
+        <div><input type="range" aria-label="Playback position" min={0} max={effectiveDuration} step={0.1} value={currentTime} onChange={onSeek} style={{ '--range-progress': `${progressPercent}%` } as React.CSSProperties} className="playback-range h-11 w-full accent-amber-200" /><p className="text-center text-xs tabular-nums text-zinc-400">{time}</p></div>
+        <div className="flex items-center justify-center gap-5"><button aria-label="Previous track" onClick={onPreviousTrack} className="p-3"><SkipBack /></button><button aria-label={isPlaying ? 'Pause' : 'Play'} onClick={onTogglePlay} className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-200 text-zinc-950">{isPlaying ? <Pause /> : <Play />}</button><button aria-label="Next track" onClick={onNextTrack} className="p-3"><SkipForward /></button></div>
+        <div className="flex items-center justify-around"><button onClick={onToggleShuffle} aria-label="Toggle shuffle" aria-pressed={isShuffle} className={`p-3 ${isShuffle ? 'text-amber-200' : 'text-zinc-400'}`}><Shuffle /></button><button onClick={() => onToggleFavorite(track.id)} aria-label="Toggle favorite" aria-pressed={track.isFavorite} className="p-3"><Heart className={track.isFavorite ? 'fill-rose-400 text-rose-400' : ''} /></button><button onClick={onToggleRepeat} aria-label={`Repeat ${repeatMode}`} className={`p-3 ${repeatMode !== 'off' ? 'text-amber-200' : 'text-zinc-400'}`}>{repeatMode === 'one' ? <Repeat1 /> : <Repeat />}</button></div>
+        <label className="flex items-center justify-between text-sm text-zinc-400">Playback speed<select aria-label="Playback speed" value={playbackSpeed} onChange={event => onSetPlaybackSpeed(Number(event.target.value))} className="min-h-11 rounded-lg bg-zinc-800 px-4 text-white">{[0.75, 1, 1.25, 1.5, 2].map(speed => <option key={speed} value={speed}>{speed}x</option>)}</select></label>
+      </div>}
+    </dialog>
   <footer
     id="bottom-playback-bar"
     aria-label="Playback controls"
@@ -105,7 +127,7 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
       ? 'relative z-30 flex h-[min(70vh,560px)] w-[min(340px,calc(100vw-3rem))] shrink-0 flex-col justify-between gap-5 overflow-y-auto rounded-r-2xl border border-l-0 border-white/[0.12] bg-[#0b0d12]/95 p-4 shadow-[12px_0_36px_rgba(0,0,0,0.35)] backdrop-blur-2xl select-none'
       : embedded
       ? 'relative z-20 mx-auto my-6 grid w-full max-w-3xl shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 rounded-2xl border border-white/[0.12] bg-white/[0.075] p-4 shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none'
-      : 'relative z-30 grid shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 border-t border-white/[0.08] bg-[#0b0d12]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none md:flex md:h-24 md:justify-between md:gap-4 md:px-6 md:py-0 xl:px-8'}
+      : 'relative z-30 hidden shrink-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] items-center gap-x-3 gap-y-2 border-t border-white/[0.08] bg-[#0b0d12]/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-12px_36px_rgba(0,0,0,0.22)] backdrop-blur-2xl select-none md:flex md:h-24 md:justify-between md:gap-4 md:px-6 md:py-0 xl:px-8'}
   >
     <div className={pullout
       ? 'pointer-events-none absolute left-0 right-0 top-0 h-px bg-white/[0.06]'
@@ -324,4 +346,5 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
       />
     </div>
   </footer>
-);
+  </>;
+};

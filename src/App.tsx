@@ -44,6 +44,11 @@ import { ImagesView } from './components/ImagesView';
 import { SpotifyView } from './components/SpotifyView';
 import { MagneticLogo } from './components/MagneticLogo';
 import { ListeningHome } from './components/ListeningHome';
+import { QueuePanel } from './components/QueuePanel';
+import { useMediaSession } from './components/useMediaSession';
+import { ContinueListening } from './components/ContinueListening';
+import { collectDroppedFiles, fileIdentity, isMediaFile } from './utils/mediaImport';
+import { loadListeningHistory, saveListeningEntry, type ListeningEntry } from './utils/persistence';
 import type { RotationalHubDestination } from './components/RotationalHub';
 
 // ==========================================
@@ -103,6 +108,9 @@ export default function App() {
   });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [showQueueDrawer, setShowQueueDrawer] = useState<boolean>(false);
+  const [upNext, setUpNext] = useState<string[]>([]);
+  const [sleepDeadline, setSleepDeadline] = useState<number | null>(null);
+  const [sleepRemaining, setSleepRemaining] = useState(0);
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false);
   const [showEqualizerModal, setShowEqualizerModal] = useState<boolean>(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
@@ -120,6 +128,14 @@ export default function App() {
   const [images, setImages] = useState<ImageAsset[]>([]);
   const [imageCollections, setImageCollections] = useState<ImageCollection[]>([]);
   const [storageReady, setStorageReady] = useState(false);
+  const [history, setHistory] = useState<ListeningEntry[]>([]);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
+  const [importSummary, setImportSummary] = useState('');
+  const importing = useRef(false);
+  const [isFileDrag, setIsFileDrag] = useState(false);
+  const dragDepth = useRef(0);
+  const pendingResume = useRef<{ id: string; position: number } | null>(null);
+  const lastHistorySave = useRef(0);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -130,7 +146,7 @@ export default function App() {
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('all');
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
-  const [audioDevice] = useState<string>('Lossless Direct ASIO • 24-bit / 96kHz');
+  const [audioDevice] = useState<string>('Browser audio output');
   const [selectedEqPreset, setSelectedEqPreset] = useState<string>('Spatial Immersive');
   const [eqBands, setEqBands] = useState<number[]>([3, 2, -1, 3, 4]);
 
@@ -251,6 +267,10 @@ export default function App() {
         }
         setTracks((current) => [...current, ...savedTracks.filter((saved) => !current.some((track) => track.id === saved.id))]);
         setImages(savedImages);
+        try {
+          const savedHistory = await loadListeningHistory();
+          if (active) setHistory(savedHistory);
+        } catch { showToast('Listening history could not be restored.'); }
         setPlaylists(savedPlaylists);
         setImageCollections(savedCollections);
         setVolume(settings.volume);
@@ -517,6 +537,16 @@ export default function App() {
 
   const handleNextTrack = useCallback(() => {
     if (tracks.length === 0) return;
+    const queuedId = upNext.find(id => tracks.some(track => track.id === id));
+    if (queuedId) {
+      setUpNext(previous => previous.slice(previous.indexOf(queuedId) + 1));
+      const index = tracks.findIndex(track => track.id === queuedId);
+      const el = tracks[index].mediaType === 'video' ? videoRef.current : audioRef.current;
+      if (index === currentTrackIndex && el) { el.currentTime = 0; void el.play().catch(() => setIsPlaying(false)); }
+      setCurrentTrackIndex(index); setCurrentTime(0); setIsPlaying(true);
+      if (tracks[index].mediaType === 'video') setActiveTab('video-player');
+      return;
+    }
     if (activePlaylistId && playlistQueueIds.length) {
       const currentId = tracks[currentTrackIndex]?.id;
       const currentQueueIndex = playlistQueueIds.indexOf(currentId);
@@ -534,7 +564,7 @@ export default function App() {
     }
     setCurrentTime(0);
     setIsPlaying(true);
-  }, [activePlaylistId, currentTrackIndex, isShuffle, playlistQueueIds, tracks]);
+  }, [activePlaylistId, currentTrackIndex, isShuffle, playlistQueueIds, tracks, upNext]);
 
   const handlePrevTrack = useCallback(() => {
     if (tracks.length === 0) return;
@@ -603,15 +633,33 @@ export default function App() {
   // LOCAL FILE LOADING (HTML5 FILE SYSTEM API)
   // ==========================================
   const handleImportFiles = async (files: File[], playlistName?: string) => {
+    if (importing.current || !files.length) return;
+    if (!storageReady) { showToast('Please wait for your saved library to load.'); return; }
+    importing.current = true;
+    setImportSummary('');
+    setImportProgress({ done: 0, total: files.length });
     try {
-      if (!files || files.length === 0) return;
-
+      const known = new Set(tracks.flatMap(track => track.fileRef ? [fileIdentity(track.fileRef)] : []));
       const parsedTracks: Track[] = [];
+      let duplicates = 0;
+      let unsupported = 0;
+      let failed = 0;
       for (let i = 0; i < files.length; i++) {
-        const trk = await parseFileToTrack(files[i], tracks.length + i);
-        parsedTracks.push(trk);
+        const file = files[i];
+        const key = fileIdentity(file);
+        if (!isMediaFile(file)) unsupported++;
+        else if (known.has(key)) duplicates++;
+        else {
+          try {
+            const trk = await parseFileToTrack(file, tracks.length + i);
+            parsedTracks.push(trk);
+            known.add(key);
+          } catch { failed++; }
+        }
+        setImportProgress({ done: i + 1, total: files.length });
       }
-
+      setImportSummary(`${parsedTracks.length} imported · ${duplicates} duplicates skipped · ${unsupported} unsupported · ${failed} unreadable. Duplicates match filename and size.`);
+      if (!parsedTracks.length) return;
       setTracks((prev) => [...parsedTracks, ...prev]);
       setCurrentTrackIndex(0);
       setCurrentTime(0);
@@ -650,6 +698,9 @@ export default function App() {
     } catch (err) {
       console.error('Failed to import local files:', err);
       showToast('Could not import local files. Please try again.');
+    } finally {
+      importing.current = false;
+      setImportProgress(null);
     }
   };
 
@@ -865,13 +916,42 @@ export default function App() {
   // ==========================================
   // MEDIA ELEMENT EVENT LISTENERS
   // ==========================================
+  const recordListening = (el: HTMLMediaElement) => {
+    if (!currentTrack.id || pendingResume.current || el.getAttribute('src') !== currentTrack.mediaUrl) return;
+    const entry = { id: currentTrack.id, position: el.ended ? 0 : el.currentTime, playedAt: Date.now() };
+    setHistory(previous => [entry, ...previous.filter(item => item.id !== entry.id)]);
+    void saveListeningEntry(entry).catch(() => showToast('Could not save your listening position.'));
+  };
+
+  const handleResume = (id: string, position: number) => {
+    const index = tracks.findIndex(track => track.id === id);
+    if (index < 0) return;
+    const el = tracks[index].mediaType === 'video' ? videoRef.current : audioRef.current;
+    const target = Number.isFinite(position) ? Math.max(0, position) : 0;
+    pendingResume.current = { id, position: target };
+    handlePlayTrack(index);
+    if (el && el.getAttribute('src') === tracks[index].mediaUrl && el.readyState >= 1) {
+      el.currentTime = target >= el.duration - 1 ? 0 : target;
+      setCurrentTime(el.currentTime);
+      pendingResume.current = null;
+    }
+  };
+
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLMediaElement>) => {
-    if (!isDraggingScrubber.current) {
-      setCurrentTime(e.currentTarget.currentTime);
+    if (!isDraggingScrubber.current) setCurrentTime(e.currentTarget.currentTime);
+    if (!e.currentTarget.paused && Date.now() - lastHistorySave.current > 2000) {
+      lastHistorySave.current = Date.now();
+      recordListening(e.currentTarget);
     }
   };
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLMediaElement>) => {
+    if (pendingResume.current?.id === currentTrack.id) {
+      const position = pendingResume.current.position;
+      e.currentTarget.currentTime = position >= e.currentTarget.duration - 1 ? 0 : position;
+      setCurrentTime(e.currentTarget.currentTime);
+      pendingResume.current = null;
+    }
     if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
       setDuration(Math.round(e.currentTarget.duration));
     }
@@ -888,7 +968,7 @@ export default function App() {
           showToast('Playback could not continue. Check that the media file is still available.');
         });
       }
-    } else if (repeatMode === 'all') {
+    } else if (repeatMode === 'all' || upNext.length > 0) {
       handleNextTrack();
     } else {
       const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current;
@@ -926,6 +1006,22 @@ export default function App() {
 
   const effectiveDuration = duration > 0 ? duration : currentTrack.duration || 1;
   const progressPercent = Math.min(100, Math.max(0, (currentTime / effectiveDuration) * 100));
+  useMediaSession(currentTrack, isPlaying, currentTime, effectiveDuration, playbackSpeed, {
+    play: () => setIsPlaying(true), pause: () => setIsPlaying(false), next: handleNextTrack, previous: handlePrevTrack, stop: handleStop,
+    seek: position => { const el = currentTrack.mediaType === 'video' ? videoRef.current : audioRef.current; if (el) { el.currentTime = Math.min(effectiveDuration, Math.max(0, position)); setCurrentTime(el.currentTime); } },
+  });
+  useEffect(() => {
+    if (!sleepDeadline) return;
+    const restoreVolume = () => { [audioRef.current, videoRef.current].forEach(el => { if (el) el.volume = isMuted ? 0 : volume / 100; }); };
+    const tick = () => {
+      const remaining = Math.max(0, sleepDeadline - Date.now());
+      setSleepRemaining(Math.ceil(remaining / 1000));
+      [audioRef.current, videoRef.current].forEach(el => { if (el) el.volume = (isMuted ? 0 : volume / 100) * Math.min(1, remaining / 10000); });
+      if (!remaining) { audioRef.current?.pause(); videoRef.current?.pause(); setIsPlaying(false); setSleepDeadline(null); showToast('Sleep timer finished. Playback paused.'); }
+    };
+    tick(); const interval = window.setInterval(tick, 250);
+    return () => { clearInterval(interval); restoreVolume(); };
+  }, [sleepDeadline, volume, isMuted, showToast]);
   const renderPlaybackBar = (embedded = false, pullout = false) => (
     <PlaybackBar
       analyserNode={analyserRef.current}
@@ -977,8 +1073,21 @@ export default function App() {
     <div
       ref={appRootRef}
       id="phoenix-media-player-root"
+      onDragEnter={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); dragDepth.current++; setIsFileDrag(true); } }}
+      onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+      onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setIsFileDrag(false); }}
+      onDrop={(event) => {
+        event.preventDefault(); dragDepth.current = 0; setIsFileDrag(false);
+        if (importing.current) { showToast('An import is already in progress.'); return; }
+        void collectDroppedFiles(event.dataTransfer.items, event.dataTransfer.files).then(files => handleImportFiles(files)).catch(() => showToast('Could not read the dropped folder. Try Open folder instead.'));
+      }}
       className="relative flex h-[100dvh] w-screen flex-col overflow-hidden bg-zinc-950 font-sans text-zinc-100 shadow-2xl select-none"
     >
+      {isFileDrag && <div className="pointer-events-none absolute inset-3 z-[80] flex items-center justify-center rounded-2xl border-2 border-dashed border-amber-200 bg-zinc-950/95 p-8 text-center text-xl text-amber-200">Drop files or folders to add to your library</div>}
+      {(importProgress || importSummary) && <div role="status" className="z-40 flex shrink-0 items-center gap-3 border-b border-amber-200/15 bg-zinc-900 px-4 py-3 text-xs text-amber-100">
+        <div className="flex-1">{importProgress ? <><p>Importing {importProgress.done} of {importProgress.total} files…</p><progress className="mt-2 h-1 w-full accent-amber-200" value={importProgress.done} max={importProgress.total} /></> : importSummary}</div>
+        {!importProgress && <button aria-label="Dismiss import summary" onClick={() => setImportSummary('')} className="p-3"><X className="h-4 w-4" /></button>}
+      </div>}
       {/* =========================================================
           HIDDEN REAL HTML5 MEDIA ENGINES (<audio> & <video>)
           ========================================================= */}
@@ -988,7 +1097,7 @@ export default function App() {
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleMediaEnded}
         onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPause={(event) => { setIsPlaying(false); recordListening(event.currentTarget); }}
         className="hidden"
         preload="auto"
       />
@@ -1001,7 +1110,7 @@ export default function App() {
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleMediaEnded}
           onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
+          onPause={(event) => { setIsPlaying(false); recordListening(event.currentTarget); }}
           className="hidden"
           preload="auto"
           playsInline
@@ -1128,6 +1237,7 @@ export default function App() {
             onSearchFocus={handleSearchFocus}
           />
 
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && <ContinueListening tracks={tracks} history={history} onResume={handleResume} />}
           {activeTab === 'now-playing' && selectedSidebar === 'home' && (
             <ListeningHome
               trackCount={tracks.length}
@@ -1596,60 +1706,15 @@ export default function App() {
         {/* ==========================================
             RIGHT QUEUE DRAWER (SLIDE OVER)
             ========================================== */}
-        {showQueueDrawer && (
-          <aside className="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-[#11141c]/95 backdrop-blur-2xl border-l border-white/[0.08] p-6 flex flex-col gap-4 z-20 shadow-2xl animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <div className="flex items-center gap-2">
-                <ListMusic className="w-4 h-4 text-indigo-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
-                  Playback Queue ({tracks.length})
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowQueueDrawer(false)}
-                className="text-zinc-500 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2">
-              {tracks.map((t, idx) => {
-                const isCur = idx === currentTrackIndex;
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => handlePlayTrack(idx)}
-                    className={`p-2.5 rounded-xl flex items-center gap-3 cursor-pointer transition-all ${
-                      isCur
-                        ? 'bg-indigo-500/20 border border-indigo-500/40 text-white'
-                        : 'hover:bg-white/5 text-zinc-400'
-                    }`}
-                  >
-                    <img
-                      src={t.coverArt}
-                      alt={t.title}
-                      referrerPolicy="no-referrer"
-                      className="w-9 h-9 rounded-lg object-cover border border-white/10"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-semibold truncate ${isCur ? 'text-indigo-400' : 'text-zinc-200'}`}>
-                        {t.title}
-                      </p>
-                      <p className="text-[10px] text-zinc-500 truncate">{t.artist}</p>
-                    </div>
-                    <span className="text-[10px] font-mono text-zinc-500">
-                      {formatTime(t.duration)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-          </aside>
-        )}
+        {showQueueDrawer && <QueuePanel tracks={tracks} queue={upNext.filter(id => tracks.some(track => track.id === id))} onChange={setUpNext} onClose={() => setShowQueueDrawer(false)} />}
       </div>
 
+      {tracks.length > 0 && <div className="flex shrink-0 items-center justify-between border-t border-white/10 bg-zinc-950 px-4 text-xs">
+        <button className="min-h-11 text-amber-200" onClick={() => setShowQueueDrawer(open => !open)} aria-expanded={showQueueDrawer}>Up next ({upNext.length})</button>
+        <label className="flex items-center gap-2 text-zinc-400">{sleepDeadline ? `Sleep · ${formatTime(sleepRemaining)}` : 'Sleep timer'}<select aria-label="Sleep timer" value={sleepDeadline ? 'active' : 'off'} onChange={event => { const minutes = Number(event.target.value); setSleepRemaining(minutes * 60); setSleepDeadline(minutes ? Date.now() + minutes * 60000 : null); }} className="min-h-11 max-w-32 bg-zinc-950 px-2 text-zinc-200">
+          <option value="off">Off</option>{sleepDeadline && <option value="active" disabled>Timer active</option>}{[1, 15, 30, 45, 60].map(minutes => <option key={minutes} value={minutes}>{minutes} min</option>)}
+        </select></label>
+      </div>}
       {tracks.length > 0 && renderPlaybackBar()}
 
       {/* =========================================================
