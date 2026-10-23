@@ -1234,8 +1234,13 @@ export default function App() {
             searchInputRef={searchInputRef}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
-            onSearchFocus={handleSearchFocus}
-          />
+    onSearchFocus={handleSearchFocus}
+    onBack={() => {
+      setSelectedSidebar('home');
+      setActiveTab('now-playing');
+      setIsMobileNavOpen(false);
+    }}
+  />
 
           {activeTab === 'now-playing' && selectedSidebar === 'home' && <ContinueListening tracks={tracks} history={history} onResume={handleResume} />}
           {activeTab === 'now-playing' && selectedSidebar === 'home' && (

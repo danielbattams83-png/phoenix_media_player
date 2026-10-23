@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic2, Search, Upload, X } from 'lucide-react';
+import { ArrowLeft, Mic2, Search, Upload, X } from 'lucide-react';
 import type { PlayerView } from '../types';
 
 interface PlayerHeaderProps {
@@ -12,6 +12,7 @@ interface PlayerHeaderProps {
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
   onSearchFocus: () => void;
+  onBack: () => void;
 }
 
 function getViewTitle(activeTab: PlayerView): string {
@@ -34,10 +35,22 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
   searchInputRef,
   searchQuery,
   setSearchQuery,
-  onSearchFocus
+  onSearchFocus,
+  onBack
 }) => (
   <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-5 sm:px-6 xl:px-8">
-    <div>
+    <div className="flex min-w-0 items-start gap-2">
+      {activeTab !== 'now-playing' || selectedSidebar !== 'home' ? (
+        <button
+          onClick={onBack}
+          className="mt-0.5 inline-flex shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] p-2 text-zinc-400 transition hover:border-indigo-300/30 hover:bg-indigo-400/10 hover:text-indigo-200"
+          title="Back to home"
+          aria-label="Back to home"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+      ) : null}
+      <div className="min-w-0">
       <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
         {selectedSidebar === 'home' && activeTab === 'now-playing' ? 'Welcome home' : selectedSidebar === 'spotify' ? 'Spotify' : selectedSidebar === 'favorites' ? 'Liked Songs' : getViewTitle(activeTab)}
       </h1>
@@ -46,6 +59,7 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
           ? 'Your soundtrack, right now'
           : 'Explore your music collection'}
       </p>
+      </div>
     </div>
     <div className="flex w-full items-center gap-2 sm:w-auto sm:gap-3">
       <label className="flex min-w-0 flex-1 items-center gap-2.5 rounded-full border border-white/[0.08] bg-white/[0.045] px-4 py-2.5 transition-colors focus-within:border-indigo-300/40 sm:w-64 sm:flex-none">
