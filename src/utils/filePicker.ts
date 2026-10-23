@@ -57,24 +57,22 @@ export async function parseFileToTrack(file: File, indexOffset: number = 0): Pro
   const mediaUrl = URL.createObjectURL(file);
 
   // Extract duration using offscreen HTMLMediaElement
-  const duration = await new Promise<number>((resolve) => {
+  const duration = await new Promise<number>((resolve, reject) => {
     const mediaEl = document.createElement(isVideo ? 'video' : 'audio');
+    const finish = (value?: number) => {
+      clearTimeout(timeout);
+      mediaEl.onloadedmetadata = null;
+      mediaEl.onerror = null;
+      mediaEl.removeAttribute('src');
+      mediaEl.load();
+      if (value !== undefined) resolve(value);
+      else { URL.revokeObjectURL(mediaUrl); reject(new Error('Unsupported codec or unreadable media')); }
+    };
+    const timeout = setTimeout(() => finish(), 10000);
     mediaEl.preload = 'metadata';
+    mediaEl.onloadedmetadata = () => finish(Number.isFinite(mediaEl.duration) && mediaEl.duration > 0 ? Math.round(mediaEl.duration) : undefined);
+    mediaEl.onerror = () => finish();
     mediaEl.src = mediaUrl;
-
-    const timeout = setTimeout(() => {
-      resolve(180); // 3 min fallback if cannot probe
-    }, 3000);
-
-    mediaEl.onloadedmetadata = () => {
-      clearTimeout(timeout);
-      resolve(mediaEl.duration && !isNaN(mediaEl.duration) ? Math.round(mediaEl.duration) : 180);
-    };
-
-    mediaEl.onerror = () => {
-      clearTimeout(timeout);
-      resolve(180);
-    };
   });
 
   const palette = ACCENT_PALETTE[indexOffset % ACCENT_PALETTE.length];

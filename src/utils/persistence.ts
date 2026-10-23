@@ -1,7 +1,18 @@
 import type { Track, ImageAsset, ImageCollection, Playlist } from '../types';
 
 const DATABASE_NAME = 'phoenix-media-player';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
+const HISTORY_STORE = 'listening-history';
+
+export interface ListeningEntry { id: string; position: number; playedAt: number }
+
+export async function loadListeningHistory(): Promise<ListeningEntry[]> {
+  return storeRequest<ListeningEntry[]>(HISTORY_STORE, 'readonly', (store) => store.getAll());
+}
+
+export async function saveListeningEntry(entry: ListeningEntry): Promise<void> {
+  await storeRequest(HISTORY_STORE, 'readwrite', (store) => store.put(entry));
+}
 const TRACKS_STORE = 'tracks';
 const IMAGES_STORE = 'images';
 const PLAYLISTS_KEY = 'phoenix-playlists';
@@ -35,6 +46,7 @@ function openDatabase(): Promise<IDBDatabase> {
       const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
       request.onupgradeneeded = () => {
         const database = request.result;
+        if (!database.objectStoreNames.contains(HISTORY_STORE)) database.createObjectStore(HISTORY_STORE, { keyPath: 'id' });
         if (!database.objectStoreNames.contains(TRACKS_STORE)) {
           database.createObjectStore(TRACKS_STORE, { keyPath: 'id' });
         }

@@ -44,6 +44,9 @@ import { ImagesView } from './components/ImagesView';
 import { SpotifyView } from './components/SpotifyView';
 import { MagneticLogo } from './components/MagneticLogo';
 import { ListeningHome } from './components/ListeningHome';
+import { ContinueListening } from './components/ContinueListening';
+import { collectDroppedFiles, fileIdentity, isMediaFile } from './utils/mediaImport';
+import { loadListeningHistory, saveListeningEntry, type ListeningEntry } from './utils/persistence';
 import type { RotationalHubDestination } from './components/RotationalHub';
 
 // ==========================================
@@ -120,6 +123,14 @@ export default function App() {
   const [images, setImages] = useState<ImageAsset[]>([]);
   const [imageCollections, setImageCollections] = useState<ImageCollection[]>([]);
   const [storageReady, setStorageReady] = useState(false);
+  const [history, setHistory] = useState<ListeningEntry[]>([]);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
+  const [importSummary, setImportSummary] = useState('');
+  const importing = useRef(false);
+  const [isFileDrag, setIsFileDrag] = useState(false);
+  const dragDepth = useRef(0);
+  const pendingResume = useRef<{ id: string; position: number } | null>(null);
+  const lastHistorySave = useRef(0);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -130,7 +141,7 @@ export default function App() {
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('all');
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
-  const [audioDevice] = useState<string>('Lossless Direct ASIO • 24-bit / 96kHz');
+  const [audioDevice] = useState<string>('Browser audio output');
   const [selectedEqPreset, setSelectedEqPreset] = useState<string>('Spatial Immersive');
   const [eqBands, setEqBands] = useState<number[]>([3, 2, -1, 3, 4]);
 
@@ -251,6 +262,10 @@ export default function App() {
         }
         setTracks((current) => [...current, ...savedTracks.filter((saved) => !current.some((track) => track.id === saved.id))]);
         setImages(savedImages);
+        try {
+          const savedHistory = await loadListeningHistory();
+          if (active) setHistory(savedHistory);
+        } catch { showToast('Listening history could not be restored.'); }
         setPlaylists(savedPlaylists);
         setImageCollections(savedCollections);
         setVolume(settings.volume);
@@ -603,15 +618,33 @@ export default function App() {
   // LOCAL FILE LOADING (HTML5 FILE SYSTEM API)
   // ==========================================
   const handleImportFiles = async (files: File[], playlistName?: string) => {
+    if (importing.current || !files.length) return;
+    if (!storageReady) { showToast('Please wait for your saved library to load.'); return; }
+    importing.current = true;
+    setImportSummary('');
+    setImportProgress({ done: 0, total: files.length });
     try {
-      if (!files || files.length === 0) return;
-
+      const known = new Set(tracks.flatMap(track => track.fileRef ? [fileIdentity(track.fileRef)] : []));
       const parsedTracks: Track[] = [];
+      let duplicates = 0;
+      let unsupported = 0;
+      let failed = 0;
       for (let i = 0; i < files.length; i++) {
-        const trk = await parseFileToTrack(files[i], tracks.length + i);
-        parsedTracks.push(trk);
+        const file = files[i];
+        const key = fileIdentity(file);
+        if (!isMediaFile(file)) unsupported++;
+        else if (known.has(key)) duplicates++;
+        else {
+          try {
+            const trk = await parseFileToTrack(file, tracks.length + i);
+            parsedTracks.push(trk);
+            known.add(key);
+          } catch { failed++; }
+        }
+        setImportProgress({ done: i + 1, total: files.length });
       }
-
+      setImportSummary(`${parsedTracks.length} imported · ${duplicates} duplicates skipped · ${unsupported} unsupported · ${failed} unreadable. Duplicates match filename and size.`);
+      if (!parsedTracks.length) return;
       setTracks((prev) => [...parsedTracks, ...prev]);
       setCurrentTrackIndex(0);
       setCurrentTime(0);
@@ -650,6 +683,9 @@ export default function App() {
     } catch (err) {
       console.error('Failed to import local files:', err);
       showToast('Could not import local files. Please try again.');
+    } finally {
+      importing.current = false;
+      setImportProgress(null);
     }
   };
 
@@ -865,13 +901,42 @@ export default function App() {
   // ==========================================
   // MEDIA ELEMENT EVENT LISTENERS
   // ==========================================
+  const recordListening = (el: HTMLMediaElement) => {
+    if (!currentTrack.id || pendingResume.current || el.getAttribute('src') !== currentTrack.mediaUrl) return;
+    const entry = { id: currentTrack.id, position: el.ended ? 0 : el.currentTime, playedAt: Date.now() };
+    setHistory(previous => [entry, ...previous.filter(item => item.id !== entry.id)]);
+    void saveListeningEntry(entry).catch(() => showToast('Could not save your listening position.'));
+  };
+
+  const handleResume = (id: string, position: number) => {
+    const index = tracks.findIndex(track => track.id === id);
+    if (index < 0) return;
+    const el = tracks[index].mediaType === 'video' ? videoRef.current : audioRef.current;
+    const target = Number.isFinite(position) ? Math.max(0, position) : 0;
+    pendingResume.current = { id, position: target };
+    handlePlayTrack(index);
+    if (el && el.getAttribute('src') === tracks[index].mediaUrl && el.readyState >= 1) {
+      el.currentTime = target >= el.duration - 1 ? 0 : target;
+      setCurrentTime(el.currentTime);
+      pendingResume.current = null;
+    }
+  };
+
   const handleTimeUpdate = (e: React.SyntheticEvent<HTMLMediaElement>) => {
-    if (!isDraggingScrubber.current) {
-      setCurrentTime(e.currentTarget.currentTime);
+    if (!isDraggingScrubber.current) setCurrentTime(e.currentTarget.currentTime);
+    if (!e.currentTarget.paused && Date.now() - lastHistorySave.current > 2000) {
+      lastHistorySave.current = Date.now();
+      recordListening(e.currentTarget);
     }
   };
 
   const handleLoadedMetadata = (e: React.SyntheticEvent<HTMLMediaElement>) => {
+    if (pendingResume.current?.id === currentTrack.id) {
+      const position = pendingResume.current.position;
+      e.currentTarget.currentTime = position >= e.currentTarget.duration - 1 ? 0 : position;
+      setCurrentTime(e.currentTarget.currentTime);
+      pendingResume.current = null;
+    }
     if (e.currentTarget.duration && !isNaN(e.currentTarget.duration)) {
       setDuration(Math.round(e.currentTarget.duration));
     }
@@ -977,8 +1042,21 @@ export default function App() {
     <div
       ref={appRootRef}
       id="phoenix-media-player-root"
+      onDragEnter={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); dragDepth.current++; setIsFileDrag(true); } }}
+      onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }}
+      onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setIsFileDrag(false); }}
+      onDrop={(event) => {
+        event.preventDefault(); dragDepth.current = 0; setIsFileDrag(false);
+        if (importing.current) { showToast('An import is already in progress.'); return; }
+        void collectDroppedFiles(event.dataTransfer.items, event.dataTransfer.files).then(files => handleImportFiles(files)).catch(() => showToast('Could not read the dropped folder. Try Open folder instead.'));
+      }}
       className="relative flex h-[100dvh] w-screen flex-col overflow-hidden bg-zinc-950 font-sans text-zinc-100 shadow-2xl select-none"
     >
+      {isFileDrag && <div className="pointer-events-none absolute inset-3 z-[80] flex items-center justify-center rounded-2xl border-2 border-dashed border-amber-200 bg-zinc-950/95 p-8 text-center text-xl text-amber-200">Drop files or folders to add to your library</div>}
+      {(importProgress || importSummary) && <div role="status" className="z-40 flex shrink-0 items-center gap-3 border-b border-amber-200/15 bg-zinc-900 px-4 py-3 text-xs text-amber-100">
+        <div className="flex-1">{importProgress ? <><p>Importing {importProgress.done} of {importProgress.total} files…</p><progress className="mt-2 h-1 w-full accent-amber-200" value={importProgress.done} max={importProgress.total} /></> : importSummary}</div>
+        {!importProgress && <button aria-label="Dismiss import summary" onClick={() => setImportSummary('')} className="p-3"><X className="h-4 w-4" /></button>}
+      </div>}
       {/* =========================================================
           HIDDEN REAL HTML5 MEDIA ENGINES (<audio> & <video>)
           ========================================================= */}
@@ -988,7 +1066,7 @@ export default function App() {
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleMediaEnded}
         onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPause={(event) => { setIsPlaying(false); recordListening(event.currentTarget); }}
         className="hidden"
         preload="auto"
       />
@@ -1001,7 +1079,7 @@ export default function App() {
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleMediaEnded}
           onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
+          onPause={(event) => { setIsPlaying(false); recordListening(event.currentTarget); }}
           className="hidden"
           preload="auto"
           playsInline
@@ -1128,6 +1206,7 @@ export default function App() {
             onSearchFocus={handleSearchFocus}
           />
 
+          {activeTab === 'now-playing' && selectedSidebar === 'home' && <ContinueListening tracks={tracks} history={history} onResume={handleResume} />}
           {activeTab === 'now-playing' && selectedSidebar === 'home' && (
             <ListeningHome
               trackCount={tracks.length}

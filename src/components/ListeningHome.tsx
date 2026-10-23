@@ -29,7 +29,7 @@ export function ListeningHome({ trackCount, playlistCount, activeMode, onImport,
             <button onClick={onImport} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-amber-200 px-5 text-sm font-semibold text-zinc-950 transition hover:bg-amber-100"><Plus className="h-4 w-4" /> Add media</button>
             <button onClick={onImportFolder} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 text-sm font-medium text-zinc-200 transition hover:bg-white/10"><FolderOpen className="h-4 w-4" /> Open folder</button>
           </div>
-          <p className="mt-5 flex items-center gap-1.5 text-[11px] text-zinc-400"><ShieldCheck className="h-3.5 w-3.5" /> Local files stay on your device.</p>
+          <p className="mt-5 flex items-center gap-1.5 text-[11px] text-zinc-400"><ShieldCheck className="h-3.5 w-3.5" /> Drop files or folders anywhere. Media stays on-device.</p>
         </div>
         <img src="/phoenix_logo.png" alt="" className="pointer-events-none absolute right-8 top-1/2 hidden w-[34%] -translate-y-1/2 rounded-full opacity-20 mix-blend-luminosity lg:block" />
       </section>
