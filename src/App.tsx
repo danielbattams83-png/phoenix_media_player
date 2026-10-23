@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Play,
-  ChevronLeft,
   Heart,
   ListMusic,
   Folder,
@@ -44,8 +43,8 @@ import { PlaylistsView } from './components/PlaylistsView';
 import { ImagesView } from './components/ImagesView';
 import { SpotifyView } from './components/SpotifyView';
 import { MagneticLogo } from './components/MagneticLogo';
-import { InteractivePhoenixHero } from './components/InteractivePhoenixHero';
-import { RotationalHub, type RotationalHubDestination } from './components/RotationalHub';
+import { ListeningHome } from './components/ListeningHome';
+import type { RotationalHubDestination } from './components/RotationalHub';
 
 // ==========================================
 // UTILITY FUNCTIONS
@@ -103,7 +102,6 @@ export default function App() {
     return params.has('code') || params.has('error') ? 'spotify' : 'local-files';
   });
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
-  const [isPlaybackPulloutOpen, setIsPlaybackPulloutOpen] = useState<boolean>(false);
   const [showQueueDrawer, setShowQueueDrawer] = useState<boolean>(false);
   const [showLyricsPanel, setShowLyricsPanel] = useState<boolean>(false);
   const [showEqualizerModal, setShowEqualizerModal] = useState<boolean>(false);
@@ -1028,7 +1026,7 @@ export default function App() {
 
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-indigo-600 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 text-xs font-semibold animate-bounce border border-indigo-400/40">
+        <div role="status" className="absolute top-14 left-1/2 w-max max-w-[calc(100%-2rem)] -translate-x-1/2 z-50 bg-zinc-800 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-medium border border-white/15">
           <CheckCircle2 className="w-4 h-4" />
           <span>{toastMessage}</span>
         </div>
@@ -1114,12 +1112,13 @@ export default function App() {
         {/* ==========================================
             CENTER MAIN CANVAS (IMMERSIVE THEME)
             ========================================== */}
-        <main className="relative flex flex-1 flex-col overflow-y-auto bg-[#090b10]">
+        <main className="player-canvas relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-[#111212]">
           {/* Radial ambient background highlight */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_-20%,rgba(129,140,248,0.13),transparent_70%)] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_90%_0%,rgba(251,191,36,0.035),transparent_50%)] pointer-events-none" />
 
           <PlayerHeader
             activeTab={activeTab}
+            selectedSidebar={selectedSidebar}
             isLyricsOpen={showLyricsPanel}
             onImportFiles={handleLoadLocalFiles}
             onToggleLyrics={() => setShowLyricsPanel((open) => !open)}
@@ -1130,21 +1129,20 @@ export default function App() {
           />
 
           {activeTab === 'now-playing' && selectedSidebar === 'home' && (
-            <>
-              <div className="relative z-10 flex shrink-0 flex-col items-center px-4">
-                <div className="flex flex-col items-center text-center">
-                  <InteractivePhoenixHero audioLevel={audioLevel} size={1120} />
-                  <div className="mt-2">
-                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-indigo-200/90">
-                      Phoenix Player
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Choose a listening space
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </>
+            <ListeningHome
+              trackCount={tracks.length}
+              playlistCount={playlists.length}
+              activeMode={activePlayerMode}
+              onImport={handleLoadLocalFiles}
+              onImportFolder={handleImportFolderAsPlaylist}
+              onPlaylists={() => { setSelectedSidebar('playlists'); setActiveTab('playlists'); }}
+              onNavigate={(destination) => {
+                setActivePlayerMode(destination);
+                if (destination === 'equalizer') { setShowEqualizerModal(true); return; }
+                setSelectedSidebar(destination === 'local-files' ? 'tracks' : destination);
+                setActiveTab(destination === 'local-files' ? 'file-browser' : destination === 'youtube' ? 'youtube' : 'now-playing');
+              }}
+            />
           )}
 
           {/* TAB 1: NOW PLAYING (IMMERSIVE SHOWCASE HERO) */}
@@ -1296,54 +1294,7 @@ export default function App() {
               )}
             </div>
           )}
-          {activeTab === 'now-playing' && selectedSidebar === 'home' && tracks.length === 0 && (
-            <section className="relative z-10 mx-auto flex w-full max-w-xl flex-1 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-indigo-300">
-                <Folder className="h-6 w-6" />
-              </div>
-              <h1 className="text-xl font-semibold text-white">Your library is empty</h1>
-              <p className="max-w-sm text-sm text-zinc-400">
-                Add music or video files to start building your library and play your first track.
-              </p>
-              <button
-                type="button"
-                onClick={handleLoadLocalFiles}
-                className="mt-2 rounded-full bg-indigo-400 px-5 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-indigo-300"
-              >
-                Add music
-              </button>
-            </section>
-          )}
-          {activeTab === 'now-playing' && selectedSidebar === 'home' && (
-            <div className="relative z-10 flex shrink-0 flex-col items-center px-4">
-              <RotationalHub
-                initialDestination={activePlayerMode}
-                onSelectMode={(destination) => {
-                  setActivePlayerMode(destination);
-                }}
-                onActivateMode={(destination) => {
-                  switch (destination) {
-                    case 'local-files':
-                      setSelectedSidebar('tracks');
-                      setActiveTab('file-browser');
-                      break;
-                    case 'spotify':
-                      setSelectedSidebar('spotify');
-                      setActiveTab('now-playing');
-                      break;
-                    case 'youtube':
-                      setSelectedSidebar('youtube');
-                      setActiveTab('youtube');
-                      break;
-                    case 'equalizer':
-                      setSelectedSidebar('home');
-                      setShowEqualizerModal(true);
-                      break;
-                  }
-                }}
-              />
-            </div>
-          )}
+
 
           {/* VIDEO PLAYER VIEW */}
           {(activeTab === 'video-player' || currentTrack.mediaType === 'video') && activeTab !== 'file-browser' && activeTab !== 'visualizer' && activeTab !== 'albums' && activeTab !== 'playlists' && activeTab !== 'spotify' && activeTab !== 'images' && selectedSidebar !== 'spotify' && (
@@ -1699,26 +1650,7 @@ export default function App() {
         )}
       </div>
 
-      {tracks.length > 0 && (
-        <aside
-          className="fixed left-0 top-1/2 z-40 flex -translate-y-1/2 items-center md:left-60 xl:left-64"
-          aria-label="Pullout playback controls"
-        >
-          <button
-            type="button"
-            onClick={() => setIsPlaybackPulloutOpen((open) => !open)}
-            className={`flex h-[min(42vh,360px)] w-8 shrink-0 items-center justify-center border border-l-0 border-white/[0.12] bg-[#11141c]/95 text-zinc-300 shadow-lg backdrop-blur-xl transition-colors hover:bg-indigo-400/20 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
-              isPlaybackPulloutOpen ? 'rounded-l-xl border-r-0' : 'rounded-r-xl'
-            }`}
-            aria-label={isPlaybackPulloutOpen ? 'Close playback controls' : 'Open playback controls'}
-            aria-expanded={isPlaybackPulloutOpen}
-            title={isPlaybackPulloutOpen ? 'Close playback controls' : 'Open playback controls'}
-          >
-            {isPlaybackPulloutOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-          {isPlaybackPulloutOpen && renderPlaybackBar(false, true)}
-        </aside>
-      )}
+      {tracks.length > 0 && renderPlaybackBar()}
 
       {/* =========================================================
           MODALS: EQUALIZER DSP & KEYBOARD SHORTCUTS
