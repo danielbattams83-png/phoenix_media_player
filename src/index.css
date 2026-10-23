@@ -1,5 +1,39 @@
 @import "tailwindcss";
 
+@theme {
+  --color-indigo-200: #fce6b4;
+  --color-indigo-300: #f3d596;
+  --color-indigo-400: #e9bf73;
+  --color-indigo-500: #c99b50;
+  --color-indigo-600: #84602c;
+}
+
+:root {
+  color-scheme: dark;
+  --surface: #111212;
+  --surface-raised: #1a1b1b;
+  --accent: #f3d596;
+  --border: rgba(255, 255, 255, 0.09);
+}
+
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.45; }
+button:focus-visible, a:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.welcome-panel {
+  background: radial-gradient(ellipse at 95% 10%, #55402b55, transparent 65%), linear-gradient(110deg, #242421, #1b1b19);
+}
+#sidebar-navigation { background: #0d0e0e; }
+#title-bar { background: #0d0e0e !important; }
+#bottom-playback-bar { background: #141515; }
+.player-canvas { scrollbar-gutter: stable; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
 @layer base {
   body {
     @apply text-zinc-100 antialiased select-none overflow-hidden;
@@ -42,8 +76,8 @@ input[type="range"].playback-range {
 input[type="range"].playback-range::-webkit-slider-runnable-track {
   background: linear-gradient(
     to right,
-    #a5b4fc 0%,
-    #818cf8 var(--range-progress, 0%),
+    #f3d596 0%,
+    #e9bf73 var(--range-progress, 0%),
     rgba(255, 255, 255, 0.12) var(--range-progress, 0%),
     rgba(255, 255, 255, 0.12) 100%
   );
@@ -80,7 +114,7 @@ input[type="range"].playback-range::-moz-range-track {
 input[type="range"].playback-range::-moz-range-progress {
   height: 4px;
   border-radius: 9999px;
-  background: linear-gradient(to right, #a5b4fc, #818cf8);
+  background: linear-gradient(to right, #f3d596, #e9bf73);
 }
 input[type="range"]::-moz-range-thumb {
   height: 12px;

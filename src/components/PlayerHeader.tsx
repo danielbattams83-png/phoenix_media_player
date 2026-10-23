@@ -4,6 +4,7 @@ import type { PlayerView } from '../types';
 
 interface PlayerHeaderProps {
   activeTab: PlayerView;
+  selectedSidebar: string;
   isLyricsOpen: boolean;
   onImportFiles: () => void;
   onToggleLyrics: () => void;
@@ -26,6 +27,7 @@ function getViewTitle(activeTab: PlayerView): string {
 
 export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
   activeTab,
+  selectedSidebar,
   isLyricsOpen,
   onImportFiles,
   onToggleLyrics,
@@ -37,7 +39,7 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
   <header className="relative z-10 flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-5 sm:px-6 xl:px-8">
     <div>
       <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">
-        {getViewTitle(activeTab)}
+        {selectedSidebar === 'home' && activeTab === 'now-playing' ? 'Welcome home' : selectedSidebar === 'spotify' ? 'Spotify' : selectedSidebar === 'favorites' ? 'Liked Songs' : getViewTitle(activeTab)}
       </h1>
       <p className="mt-0.5 text-xs text-zinc-500">
         {activeTab === 'now-playing' || activeTab === 'video-player'
@@ -73,6 +75,7 @@ export const PlayerHeader: React.FC<PlayerHeaderProps> = ({
         onClick={onImportFiles}
         className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-indigo-400 px-4 text-xs font-semibold text-zinc-950 shadow-[0_6px_24px_rgba(129,140,248,0.2)] transition hover:bg-indigo-300 active:scale-[0.98]"
         title="Import media files"
+        aria-label="Import media files"
       >
         <Upload className="h-4 w-4" />
         <span className="hidden sm:inline">Add music</span>

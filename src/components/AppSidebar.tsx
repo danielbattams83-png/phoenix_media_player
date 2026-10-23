@@ -53,7 +53,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const navItemClass = (active: boolean) =>
     `w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-left transition-colors ${
       active
-        ? 'bg-white/[0.09] text-white font-medium'
+        ? 'bg-amber-200/10 text-amber-200 font-medium'
         : 'text-zinc-400 hover:bg-white/[0.045] hover:text-white'
     }`;
 
