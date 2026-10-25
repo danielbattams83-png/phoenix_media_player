@@ -46,6 +46,7 @@ import { MagneticLogo } from './components/MagneticLogo';
 import { ListeningHome } from './components/ListeningHome';
 import { QueuePanel } from './components/QueuePanel';
 import { useMediaSession } from './components/useMediaSession';
+import { useBeatGlow } from './components/useBeatGlow';
 import { ContinueListening } from './components/ContinueListening';
 import { collectDroppedFiles, fileIdentity, isMediaFile } from './utils/mediaImport';
 import { loadListeningHistory, saveListeningEntry, type ListeningEntry } from './utils/persistence';
@@ -162,6 +163,8 @@ export default function App() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const biquadFiltersRef = useRef<BiquadFilterNode[]>([]);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+
+  useBeatGlow(appRootRef, analyserRef, isPlaying, isMuted);
 
   const currentTrack = tracks[currentTrackIndex] ?? tracks[0] ?? EMPTY_TRACK;
 
@@ -359,8 +362,8 @@ export default function App() {
       audioContextRef.current = ctx;
 
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 128;
-      analyser.smoothingTimeConstant = 0.8;
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.65;
       analyserRef.current = analyser;
 
       // 5-band EQ filters
@@ -448,6 +451,8 @@ export default function App() {
     }
 
     if (isPlaying) {
+      initWebAudio();
+      if (audioContextRef.current?.state === 'suspended') void audioContextRef.current.resume().catch(() => {});
       el.play().catch((error: unknown) => {
         console.error('Could not start playback:', error);
         setIsPlaying(false);
@@ -456,7 +461,7 @@ export default function App() {
     } else {
       el.pause();
     }
-  }, [currentTrackIndex, currentTrack.mediaUrl, currentTrack.mediaType, isPlaying, showToast]);
+  }, [currentTrackIndex, currentTrack.mediaUrl, currentTrack.mediaType, isPlaying, showToast, initWebAudio]);
 
   // Volume & Speed Sync
   useEffect(() => {
@@ -1293,7 +1298,7 @@ export default function App() {
                     style={{ backgroundColor: currentTrack.accentColor }}
                   />
 
-                  <div className="w-64 h-64 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-2xl relative z-10 shadow-[0_28px_80px_rgba(0,0,0,0.55)] flex items-center justify-center overflow-hidden border border-white/10 bg-zinc-900">
+                  <div className="beat-card w-64 h-64 lg:w-72 lg:h-72 xl:w-80 xl:h-80 rounded-2xl relative z-10 shadow-[0_28px_80px_rgba(0,0,0,0.55)] flex items-center justify-center overflow-hidden border border-white/10 bg-zinc-900">
                     <img
                       src={currentTrack.coverArt}
                       alt={currentTrack.title}
