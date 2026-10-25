@@ -30,6 +30,40 @@ button:focus-visible, a:focus-visible, select:focus-visible {
 #bottom-playback-bar { background: #141515; }
 .player-canvas { scrollbar-gutter: stable; }
 
+#phoenix-media-player-root {
+  --beat-strength: 0;
+  --beat-color: var(--accent);
+}
+
+.beat-card,
+.listening-space,
+.welcome-panel {
+  box-shadow:
+    0 0 calc(var(--beat-strength) * 32px) color-mix(in srgb, var(--beat-color) calc(var(--beat-strength) * 28%), transparent),
+    inset 0 0 calc(var(--beat-strength) * 22px) color-mix(in srgb, var(--beat-color) calc(var(--beat-strength) * 9%), transparent);
+  border-color: color-mix(in srgb, var(--beat-color) calc(9% + var(--beat-strength) * 55%), var(--border));
+}
+
+.listening-space {
+  position: relative;
+  isolation: isolate;
+}
+
+.listening-space::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid var(--beat-color);
+  opacity: calc(var(--beat-strength) * 0.55);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--beat-color) 25%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #phoenix-media-player-root { --beat-strength: 0 !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
