@@ -14,6 +14,7 @@ import {
   Film,
   CheckCircle2,
   AlertCircle,
+  Share2,
 } from 'lucide-react';
 import { Track, Playlist, EqualizerPreset, PlayerView, ImageAsset, ImageCollection } from './types';
 import { openLocalMediaFiles, openLocalMediaFolder, parseFileToTrack, formatBytes } from './utils/filePicker';
@@ -51,6 +52,7 @@ import { ContinueListening } from './components/ContinueListening';
 import { collectDroppedFiles, fileIdentity, isMediaFile } from './utils/mediaImport';
 import { loadListeningHistory, saveListeningEntry, type ListeningEntry } from './utils/persistence';
 import type { RotationalHubDestination } from './components/RotationalHub';
+import { shareTrack } from './utils/shareTrack';
 
 // ==========================================
 // UTILITY FUNCTIONS
@@ -217,6 +219,18 @@ export default function App() {
       setToastMessage(null);
     }, 4000);
   }, []);
+
+  const handleShareTrack = useCallback(async (track: Track) => {
+    try {
+      const result = await shareTrack(track);
+      if (result === 'shared') showToast(`Shared "${track.title}"`);
+      if (result === 'downloaded') showToast(`Downloaded "${track.title}" — attach the file in your message to send it`);
+      if (result === 'copied') showToast(`Copied sharing details for "${track.title}"`);
+    } catch (error) {
+      console.error('Could not share track:', error);
+      showToast('This song cannot be shared from this browser.');
+    }
+  }, [showToast]);
 
   const handleNavigateToSearch = () => {
     setSelectedSidebar('search');
@@ -1045,6 +1059,7 @@ export default function App() {
       onSeek={handleSeek}
       onStop={handleStop}
       onSetPlaybackSpeed={setPlaybackSpeed}
+      onShareTrack={(track) => void handleShareTrack(track)}
       onSetVolume={(nextVolume) => {
         setVolume(nextVolume);
         if (isMuted) setIsMuted(false);
@@ -1288,6 +1303,15 @@ export default function App() {
                   aria-label="Equalizer DSP"
                 >
                   <Sliders className="w-[18px] h-[18px] text-indigo-400" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleShareTrack(currentTrack)}
+                  className="p-3 rounded-full bg-white/[0.055] hover:bg-white/10 text-zinc-300 border border-white/[0.08] transition-colors cursor-pointer"
+                  title={`Share ${currentTrack.title}`}
+                  aria-label={`Share ${currentTrack.title}`}
+                >
+                  <Share2 className="h-[18px] w-[18px] text-indigo-400" />
                 </button>
               </div>
               <section className="flex flex-col items-center justify-center gap-8 lg:flex-row xl:gap-14">
@@ -1564,6 +1588,17 @@ export default function App() {
                         <div className="col-span-2 flex items-center justify-end gap-3 font-mono text-zinc-400">
                           <span>{formatTime(track.duration)}</span>
                           <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleShareTrack(track);
+                            }}
+                            className="p-1 text-zinc-500 hover:text-indigo-300 transition-colors"
+                            title={`Share ${track.title}`}
+                            aria-label={`Share ${track.title}`}
+                          >
+                            <Share2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
                             onClick={(e) => handleToggleFavorite(track.id, e)}
                             className="p-1 text-zinc-500 hover:text-rose-400 transition-colors"
                           >
@@ -1667,6 +1702,7 @@ export default function App() {
                 }
               }}
               onRemoveTrack={handleRemovePlaylistTrack}
+              onShareTrack={(track) => void handleShareTrack(track)}
               onRename={handleRenamePlaylist}
               onUpdateDescription={handleUpdatePlaylistDescription}
               onSelect={setSelectedSidebar}
