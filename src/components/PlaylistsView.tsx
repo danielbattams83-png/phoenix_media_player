@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ListMusic, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ListMusic, Pencil, Plus, Share2, Trash2, Upload, X } from 'lucide-react';
 import type { Playlist, Track } from '../types';
 
 function formatTime(seconds: number): string {
@@ -14,6 +14,7 @@ interface PlaylistsViewProps {
   onMoveTrack: (playlistId: string, trackId: string, direction: -1 | 1) => void;
   onPlayTrack: (trackId: string) => void;
   onRemoveTrack: (playlistId: string, trackId: string) => void;
+  onShareTrack: (track: Track) => void;
   onRename: (playlistId: string, name: string) => void;
   onUpdateDescription: (playlistId: string, description: string) => void;
   onSelect: (playlistId: string) => void;
@@ -30,6 +31,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
   onMoveTrack,
   onPlayTrack,
   onRemoveTrack,
+  onShareTrack,
   onRename,
   onUpdateDescription,
   onSelect,
@@ -162,6 +164,7 @@ export const PlaylistsView: React.FC<PlaylistsViewProps> = ({
                 <span className="w-6 text-center text-xs tabular-nums text-zinc-500">{index + 1}</span>
                 <button onClick={() => onPlayTrack(track.id)} className="min-w-0 flex-1 truncate text-left text-sm text-zinc-200 hover:text-white">{track.title} <span className="text-xs text-zinc-500">· {track.artist}</span></button>
                 <span className="text-xs tabular-nums text-zinc-500">{formatTime(track.duration)}</span>
+                <button onClick={() => onShareTrack(track)} aria-label={`Share ${track.title}`} title={`Share ${track.title}`} className="rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-white"><Share2 className="h-4 w-4" /></button>
                 <button onClick={() => onMoveTrack(selectedPlaylist.id, track.id, -1)} disabled={index === 0} aria-label={`Move ${track.title} up`} className="rounded p-1 text-zinc-400 hover:bg-white/5 disabled:opacity-25"><ArrowUp className="h-4 w-4" /></button>
                 <button onClick={() => onMoveTrack(selectedPlaylist.id, track.id, 1)} disabled={index === playlistTracks.length - 1} aria-label={`Move ${track.title} down`} className="rounded p-1 text-zinc-400 hover:bg-white/5 disabled:opacity-25"><ArrowDown className="h-4 w-4" /></button>
                 <button onClick={() => onRemoveTrack(selectedPlaylist.id, track.id)} aria-label={`Remove ${track.title} from playlist`} className="rounded p-1 text-zinc-500 hover:bg-rose-400/10 hover:text-rose-300"><X className="h-4 w-4" /></button>

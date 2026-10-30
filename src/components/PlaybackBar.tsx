@@ -8,6 +8,7 @@ import {
   Play,
   Repeat,
   Repeat1,
+  Share2,
   Square,
   Shuffle,
   SkipBack,
@@ -38,6 +39,7 @@ interface PlaybackBarProps {
   onStop: () => void;
   onSetPlaybackSpeed: (speed: number) => void;
   onSetVolume: (volume: number) => void;
+  onShareTrack: (track: Track) => void;
   onShowNowPlaying: () => void;
   onShowVisualizer: () => void;
   onToggleFavorite: (trackId: string) => void;
@@ -78,6 +80,7 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
   onOpenShortcuts,
   onPreviousTrack,
   onSeek,
+  onShareTrack,
   onShowNowPlaying,
   onShowVisualizer,
   onSetPlaybackSpeed,
@@ -116,7 +119,7 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
         <div><h3 className="break-words text-2xl font-semibold">{track.title}</h3><p className="mt-1 text-zinc-400">{track.artist}</p></div>
         <div><input type="range" aria-label="Playback position" min={0} max={effectiveDuration} step={0.1} value={currentTime} onChange={onSeek} style={{ '--range-progress': `${progressPercent}%` } as React.CSSProperties} className="playback-range h-11 w-full accent-amber-200" /><p className="text-center text-xs tabular-nums text-zinc-400">{time}</p></div>
         <div className="flex items-center justify-center gap-5"><button aria-label="Previous track" onClick={onPreviousTrack} className="p-3"><SkipBack /></button><button aria-label={isPlaying ? 'Pause' : 'Play'} onClick={onTogglePlay} className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-200 text-zinc-950">{isPlaying ? <Pause /> : <Play />}</button><button aria-label="Next track" onClick={onNextTrack} className="p-3"><SkipForward /></button></div>
-        <div className="flex items-center justify-around"><button onClick={onToggleShuffle} aria-label="Toggle shuffle" aria-pressed={isShuffle} className={`p-3 ${isShuffle ? 'text-amber-200' : 'text-zinc-400'}`}><Shuffle /></button><button onClick={() => onToggleFavorite(track.id)} aria-label="Toggle favorite" aria-pressed={track.isFavorite} className="p-3"><Heart className={track.isFavorite ? 'fill-rose-400 text-rose-400' : ''} /></button><button onClick={onToggleRepeat} aria-label={`Repeat ${repeatMode}`} className={`p-3 ${repeatMode !== 'off' ? 'text-amber-200' : 'text-zinc-400'}`}>{repeatMode === 'one' ? <Repeat1 /> : <Repeat />}</button></div>
+        <div className="flex items-center justify-around"><button onClick={onToggleShuffle} aria-label="Toggle shuffle" aria-pressed={isShuffle} className={`p-3 ${isShuffle ? 'text-amber-200' : 'text-zinc-400'}`}><Shuffle /></button><button onClick={() => onToggleFavorite(track.id)} aria-label="Toggle favorite" aria-pressed={track.isFavorite} className="p-3"><Heart className={track.isFavorite ? 'fill-rose-400 text-rose-400' : ''} /></button><button onClick={() => onShareTrack(track)} aria-label={`Share ${track.title}`} className="p-3 text-zinc-400"><Share2 /></button><button onClick={onToggleRepeat} aria-label={`Repeat ${repeatMode}`} className={`p-3 ${repeatMode !== 'off' ? 'text-amber-200' : 'text-zinc-400'}`}>{repeatMode === 'one' ? <Repeat1 /> : <Repeat />}</button></div>
         <label className="flex items-center justify-between text-sm text-zinc-400">Playback speed<select aria-label="Playback speed" value={playbackSpeed} onChange={event => onSetPlaybackSpeed(Number(event.target.value))} className="min-h-11 rounded-lg bg-zinc-800 px-4 text-white">{[0.75, 1, 1.25, 1.5, 2].map(speed => <option key={speed} value={speed}>{speed}x</option>)}</select></label>
       </div>}
     </dialog>
@@ -168,6 +171,14 @@ export const PlaybackBar: React.FC<PlaybackBarProps> = ({
         aria-label={track.isFavorite ? 'Remove from Liked Songs' : 'Add to Liked Songs'}
       >
         <Heart className={`h-4 w-4 ${track.isFavorite ? 'fill-rose-400 text-rose-400' : ''}`} />
+      </button>
+      <button
+        onClick={() => onShareTrack(track)}
+        className="rounded-full p-2 text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-white"
+        title={`Share ${track.title}`}
+        aria-label={`Share ${track.title}`}
+      >
+        <Share2 className="h-4 w-4" />
       </button>
       <button
         className="hidden rounded-md p-1 opacity-80 transition-opacity hover:opacity-100 sm:block"
